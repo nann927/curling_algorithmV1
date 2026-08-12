@@ -1,0 +1,360 @@
+"""配置加载模块。
+
+业务代码只能通过 get_config_manager/get_settings 读取配置，避免到处直接读取环境变量或 JSON 文件。
+"""
+
+import json
+import os
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """运行配置。
+
+    `.env` 中的字段使用 CURLING_ 前缀；固定业务配置来自 system_config.json。
+    """
+
+    app_env: str = "development"
+    mock_mode: bool = False
+    public_base_url: str = "http://localhost:8000"
+    host: str = "0.0.0.0"
+    port: int = 8000
+    cors_origins: list[str] = Field(default_factory=list)
+    system_config_path: str = "config/system_config.json"
+    site_config_path: str = "config/site_config.json"
+    integration_mock_path: str = "config/integration_mock.json"
+    sqlite_path: str = "data/db/curling.db"
+    log_path: str = "data/logs/app.log"
+    ffmpeg_path: str = "ffmpeg"
+    ffprobe_path: str = "ffprobe"
+    system_config: dict[str, Any] = Field(default_factory=dict)
+    site_config: dict[str, Any] = Field(default_factory=dict)
+    integration_mock_config: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = SettingsConfigDict(env_file=".env", env_prefix="CURLING_", extra="ignore")
+
+
+class SiteSheetConfig(BaseModel):
+    """现场赛道配置。"""
+
+    sheet_id: str
+    enabled: bool = True
+    position_lane_id: str | None = None
+    trigger_lane_id: str | None = None
+    direction_zones: dict[str, Any] = Field(default_factory=lambda: {"A": None, "B": None})
+
+
+class SiteLaneMapping(BaseModel):
+    """电子冰壶 lane_id 到 sheet_id 的映射。"""
+
+    lane_id: str
+    sheet_id: str
+
+
+class StoneRegistryConfig(BaseModel):
+    """冰壶石头注册表配置。
+
+    真实 tag_id 尚未提供时允许为 null；现场补齐后只改 JSON。
+    """
+
+    stone_id: str
+    tag_id: str | None = None
+
+
+class SiteCameraConfig(BaseModel):
+    """现场摄像头配置。
+
+    真实 IP、账号、Token 不写入本模型；敏感信息后续从 .env 读取。
+    """
+
+    camera_id: str
+    camera_role: str
+    sheet_id: str | None = None
+    install_end: str | None = None
+    source_provider: str
+    source_config: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("install_end")
+    @classmethod
+    def validate_install_end(cls, value: str | None) -> str | None:
+        """安装端位只能是 A/B/null。"""
+
+        if value not in (None, "A", "B"):
+            raise ValueError("install_end must be A, B or null")
+        return value
+
+
+class SiteMicrophoneConfig(BaseModel):
+    """现场麦克风配置占位，当前允许 provider/source_config 为空。"""
+
+    microphone_id: str
+    sheet_id: str | None = None
+    install_end: str | None = None
+    source_provider: str | None = None
+    source_config: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("install_end")
+    @classmethod
+    def validate_install_end(cls, value: str | None) -> str | None:
+        """安装端位只能是 A/B/null。"""
+
+        if value not in (None, "A", "B"):
+            raise ValueError("install_end must be A, B or null")
+        return value
+
+
+class SiteConfig(BaseModel):
+    """现场设备配置。
+
+    该配置用于把 camera_id、sheet_id、lane_id 和 provider 参数从业务代码中剥离。
+    """
+
+    site_id: str
+    sheets: list[SiteSheetConfig] = Field(default_factory=list)
+    lane_mappings: list[SiteLaneMapping] = Field(default_factory=list)
+    cameras: list[SiteCameraConfig] = Field(default_factory=list)
+    microphones: list[SiteMicrophoneConfig] = Field(default_factory=list)
+    stone_registry: list[StoneRegistryConfig] = Field(default_factory=list)
+    calibration: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_site_config(self) -> "SiteConfig":
+        """校验现场配置引用关系和重复 ID。"""
+
+        supported_providers = {"local_file", "fusion_server", "rtsp"}
+        sheet_id_values = [sheet.sheet_id for sheet in self.sheets]
+        sheet_ids = set(sheet_id_values)
+        if len(sheet_ids) != len(self.sheets):
+            raise ValueError(f"sheet_id must be unique, duplicates={_duplicates(sheet_id_values)}")
+
+        position_lane_ids = [sheet.position_lane_id for sheet in self.sheets if sheet.position_lane_id]
+        if len(set(position_lane_ids)) != len(position_lane_ids):
+            raise ValueError(f"position_lane_id must be unique, duplicates={_duplicates(position_lane_ids)}")
+
+        trigger_lane_ids = [sheet.trigger_lane_id for sheet in self.sheets if sheet.trigger_lane_id]
+        if len(set(trigger_lane_ids)) != len(trigger_lane_ids):
+            raise ValueError(f"trigger_lane_id must be unique, duplicates={_duplicates(trigger_lane_ids)}")
+
+        camera_ids = [camera.camera_id for camera in self.cameras]
+        if len(set(camera_ids)) != len(camera_ids):
+            raise ValueError(f"camera_id must be unique, duplicates={_duplicates(camera_ids)}")
+
+        lane_ids = [mapping.lane_id for mapping in self.lane_mappings]
+        if len(set(lane_ids)) != len(lane_ids):
+            raise ValueError(f"lane_id mapping must be unique, duplicates={_duplicates(lane_ids)}")
+
+        mapped_sheets = [mapping.sheet_id for mapping in self.lane_mappings]
+        if len(set(mapped_sheets)) != len(mapped_sheets):
+            raise ValueError(f"one sheet_id cannot be mapped by multiple lane_id values, duplicates={_duplicates(mapped_sheets)}")
+
+        for mapping in self.lane_mappings:
+            if mapping.sheet_id not in sheet_ids:
+                raise ValueError(f"lane mapping references unknown sheet_id: {mapping.sheet_id}")
+
+        for camera in self.cameras:
+            if camera.source_provider not in supported_providers:
+                raise ValueError(f"unsupported source_provider: {camera.source_provider}")
+            if camera.sheet_id is not None and camera.sheet_id not in sheet_ids:
+                raise ValueError(f"camera references unknown sheet_id: {camera.sheet_id}")
+
+        for microphone in self.microphones:
+            if microphone.sheet_id is not None and microphone.sheet_id not in sheet_ids:
+                raise ValueError(f"microphone references unknown sheet_id: {microphone.sheet_id}")
+
+        stone_ids = [stone.stone_id for stone in self.stone_registry]
+        if len(set(stone_ids)) != len(stone_ids):
+            raise ValueError(f"stone_id must be unique, duplicates={_duplicates(stone_ids)}")
+
+        tag_ids = [stone.tag_id for stone in self.stone_registry if stone.tag_id]
+        if len(set(tag_ids)) != len(tag_ids):
+            raise ValueError(f"tag_id must be unique when not null, duplicates={_duplicates(tag_ids)}")
+        return self
+
+
+class IntegrationPostProcessConfig(BaseModel):
+    """Integration Mock 赛后处理节奏配置。"""
+
+    enabled: bool = True
+    processing_duration_seconds: float = 6.0
+    progress_points: list[dict[str, float | int]] = Field(
+        default_factory=lambda: [
+            {"seconds": 0, "progress": 20},
+            {"seconds": 2, "progress": 60},
+            {"seconds": 4, "progress": 90},
+            {"seconds": 6, "progress": 100},
+        ]
+    )
+
+
+class IntegrationMockConfig(BaseModel):
+    """公网联调 Mock 配置。"""
+
+    enabled: bool = False
+    sheets: list[str] = Field(default_factory=list)
+    postprocess: IntegrationPostProcessConfig = Field(default_factory=IntegrationPostProcessConfig)
+    mock_media: dict[str, Any] = Field(default_factory=lambda: {"enabled": True, "stream_format": "m3u8"})
+
+
+class ConfigManager:
+    """统一配置管理器。"""
+
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+        self.site_config = SiteConfig.model_validate(settings.site_config)
+        self.integration_mock_config = IntegrationMockConfig.model_validate(settings.integration_mock_config)
+
+    def get_camera(self, camera_id: str) -> SiteCameraConfig:
+        """按 camera_id 获取现场摄像头配置。"""
+
+        for camera in self.site_config.cameras:
+            if camera.camera_id == camera_id:
+                return camera
+        raise KeyError(f"camera_id not found in site_config: {camera_id}")
+
+    def get_sheet_cameras(
+        self,
+        sheet_id: str,
+        *,
+        camera_role: str | None = None,
+        install_end: str | None = None,
+    ) -> list[SiteCameraConfig]:
+        """按赛道、镜头角色和端位查询摄像头。
+
+        后续 DirectorService 做切镜时只调用本方法，不直接遍历 JSON。
+        """
+
+        self.validate_sheet_id(sheet_id)
+        cameras = [camera for camera in self.site_config.cameras if camera.sheet_id == sheet_id]
+        if camera_role is not None:
+            cameras = [camera for camera in cameras if camera.camera_role == camera_role]
+        if install_end is not None:
+            cameras = [camera for camera in cameras if camera.install_end == install_end]
+        return cameras
+
+    def get_sheet_camera_ids_by_role(self, sheet_id: str) -> dict[str, list[str]]:
+        """返回某条赛道下按镜头角色分组的 camera_id。"""
+
+        grouped: dict[str, list[str]] = {}
+        for camera in self.get_sheet_cameras(sheet_id):
+            grouped.setdefault(camera.camera_role, []).append(camera.camera_id)
+        return grouped
+
+    def get_overview_camera_id(self, requested_camera_ids: list[str]) -> str:
+        """从软件传入的全景摄像头列表中选择第一路有效 camera_id。"""
+
+        if not requested_camera_ids:
+            raise ValueError("overview_cameras must not be empty")
+        self.get_camera(requested_camera_ids[0])
+        return requested_camera_ids[0]
+
+    def validate_sheet_id(self, sheet_id: str) -> None:
+        """校验 sheet_id 是否存在于现场配置。"""
+
+        if sheet_id not in {sheet.sheet_id for sheet in self.site_config.sheets}:
+            raise ValueError(f"sheet_id not found in site_config: {sheet_id}")
+
+    def get_sheet_id_by_position_lane(self, lane_id: str) -> str:
+        """将定位平台 laneId 转换为内部 sheet_id。"""
+
+        for sheet in self.site_config.sheets:
+            if sheet.position_lane_id == lane_id:
+                return sheet.sheet_id
+        raise KeyError(f"position_lane_id not found in site_config: {lane_id}")
+
+    def get_sheet_id_by_trigger_lane(self, lane_id: str) -> str:
+        """将触发平台 laneId 转换为内部 sheet_id。"""
+
+        for sheet in self.site_config.sheets:
+            if sheet.trigger_lane_id == lane_id:
+                return sheet.sheet_id
+        raise KeyError(f"trigger_lane_id not found in site_config: {lane_id}")
+
+    def get_direction_zones(self, sheet_id: str) -> dict[str, Any]:
+        """读取赛道 A/B 发球区配置。"""
+
+        self.validate_sheet_id(sheet_id)
+        for sheet in self.site_config.sheets:
+            if sheet.sheet_id == sheet_id:
+                return sheet.direction_zones
+        return {"A": None, "B": None}
+
+
+def _read_json_file(path: str) -> dict[str, Any]:
+    """读取 JSON 文件；空文件按空对象处理。"""
+
+    config_path = Path(path)
+    if not config_path.exists() or not config_path.read_text(encoding="utf-8").strip():
+        return {}
+    return json.loads(config_path.read_text(encoding="utf-8"))
+
+
+def _apply_plain_env(settings: Settings) -> Settings:
+    """兼容无 CURLING_ 前缀的部署环境变量。
+
+    公网联调文档使用 APP_ENV/MOCK_MODE/PUBLIC_BASE_URL 等名称；这里显式覆盖，避免破坏原有
+    CURLING_ 前缀配置。
+    """
+
+    plain_env_map = {
+        "APP_ENV": ("app_env", str),
+        "MOCK_MODE": ("mock_mode", _to_bool),
+        "PUBLIC_BASE_URL": ("public_base_url", str),
+        "HOST": ("host", str),
+        "PORT": ("port", int),
+        "CORS_ORIGINS": ("cors_origins", _to_list),
+        "SYSTEM_CONFIG_PATH": ("system_config_path", str),
+        "SITE_CONFIG_PATH": ("site_config_path", str),
+        "INTEGRATION_MOCK_PATH": ("integration_mock_path", str),
+    }
+    for env_name, (field_name, caster) in plain_env_map.items():
+        if env_name in os.environ:
+            setattr(settings, field_name, caster(os.environ[env_name]))
+    return settings
+
+
+def _duplicates(values: list[str]) -> list[str]:
+    """返回列表中的重复值。"""
+
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for value in values:
+        if value in seen:
+            duplicates.add(value)
+        seen.add(value)
+    return sorted(duplicates)
+
+
+def _to_bool(value: str) -> bool:
+    """解析布尔环境变量。"""
+
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _to_list(value: str) -> list[str]:
+    """解析逗号分隔环境变量。"""
+
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """加载并缓存配置，避免重复解析 JSON。"""
+
+    settings = Settings()
+    settings = _apply_plain_env(settings)
+    settings.system_config = _read_json_file(settings.system_config_path)
+    settings.site_config = _read_json_file(settings.site_config_path)
+    settings.integration_mock_config = _read_json_file(settings.integration_mock_path)
+    return settings
+
+
+@lru_cache
+def get_config_manager() -> ConfigManager:
+    """加载并缓存 ConfigManager。"""
+
+    return ConfigManager(get_settings())

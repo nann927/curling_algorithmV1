@@ -1,0 +1,9 @@
+{"kind":"trigger","payload":{"sheet_id":"sheet_01","lane_id":"trigger_lane_01","timestamp":1000,"event_type":"touch"}}
+{"kind":"position","payload":{"sheet_id":"sheet_01","lane_id":"position_lane_01","tag_id":"tag_001","timestamp":1100,"x":9.0,"y":9.0}}
+{"kind":"position","payload":{"sheet_id":"sheet_01","lane_id":"position_lane_01","tag_id":"tag_001","timestamp":1200,"x":9.1,"y":9.0}}
+{"kind":"position","payload":{"sheet_id":"sheet_01","lane_id":"position_lane_01","tag_id":"tag_001","timestamp":1300,"x":9.2,"y":9.0}}
+{"kind":"trigger","payload":{"sheet_id":"sheet_01","lane_id":"trigger_lane_01","timestamp":1400,"event_type":"departure"}}
+{"kind":"trigger","payload":{"sheet_id":"sheet_01","lane_id":"trigger_lane_01","timestamp":1500,"event_type":"magnetic_1"}}
+{"kind":"trigger","payload":{"sheet_id":"sheet_01","lane_id":"trigger_lane_01","timestamp":1600,"event_type":"alarm"}}
+{"kind":"trigger","payload":{"sheet_id":"sheet_01","lane_id":"trigger_lane_01","timestamp":1700,"event_type":"magnetic_2"}}
+{"kind":"trigger","payload":{"sheet_id":"sheet_01","lane_id":"trigger_lane_01","timestamp":1800,"event_type":"stop"}}

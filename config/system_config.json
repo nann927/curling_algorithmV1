@@ -1,0 +1,31 @@
+{
+  "ffmpeg": {
+    "ffmpeg_path": "ffmpeg",
+    "ffprobe_path": "ffprobe",
+    "stop_timeout_seconds": 5,
+    "startup_timeout_seconds": 5
+  },
+  "storage": {
+    "runtime": "data/runtime",
+    "recordings": "data/recordings",
+    "clips": "data/clips",
+    "recognition": "data/recognition",
+    "photos": "data/photos",
+    "db": "data/db/curling.db",
+    "logs": "data/logs"
+  },
+  "mock": {
+    "enabled": true,
+    "postprocess_delay_seconds": 0.05
+  },
+  "direction_detection": {
+    "confirm_count": 3,
+    "max_position_age_ms": 1000,
+    "todo": "2026-08-20 后使用真实定位频率和抖动数据现场标定"
+  },
+  "event_thresholds": {
+    "motion_threshold": null,
+    "stop_threshold": null,
+    "stop_duration_ms": null
+  }
+}

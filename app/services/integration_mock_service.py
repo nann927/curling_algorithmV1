@@ -1,0 +1,63 @@
+"""Integration/Mock 联调辅助服务。
+
+该服务只在 APP_ENV=integration 且 MOCK_MODE=true 时生效，用于生成稳定公网 Mock URL 和赛后进度。
+它不替代正式 IF-01～IF-04，只作为内部 Provider/Service 的 Mock 实现。
+"""
+
+from __future__ import annotations
+
+import time
+from typing import Callable
+
+from app.core.config import IntegrationMockConfig, get_config_manager, get_settings
+
+
+class IntegrationMockService:
+    """Integration Mock 配置与 URL 生成工具。"""
+
+    def __init__(self, clock: Callable[[], float] | None = None) -> None:
+        self._settings = get_settings()
+        self._config = get_config_manager().integration_mock_config
+        self._clock = clock or time.monotonic
+
+    @property
+    def config(self) -> IntegrationMockConfig:
+        """返回 integration_mock.json 解析后的配置。"""
+
+        return self._config
+
+    def enabled(self) -> bool:
+        """判断当前是否启用 Integration Mock。"""
+
+        return self._settings.app_env == "integration" and self._settings.mock_mode and self._config.enabled
+
+    def now(self) -> float:
+        """返回当前单调时间，测试可注入 clock。"""
+
+        return self._clock()
+
+    def live_media_url(self, match_id: str, sheet_id: str, stream_type: str) -> str:
+        """生成 PC 联调用实时节目流 Mock URL。"""
+
+        fmt = self._config.mock_media.get("stream_format", "m3u8")
+        return self._join_public_url(f"/integration/media/{match_id}/{sheet_id}/{stream_type}/program.{fmt}")
+
+    def result_media_url(self, match_id: str, filename: str) -> str:
+        """生成 PC 联调用赛后结果 Mock URL。"""
+
+        return self._join_public_url(f"/integration/media/{match_id}/results/{filename}")
+
+    def progress_for_elapsed(self, elapsed_seconds: float) -> int:
+        """按 integration_mock.json 的 progress_points 计算进度。"""
+
+        points = sorted(self._config.postprocess.progress_points, key=lambda item: float(item["seconds"]))
+        progress = 0
+        for point in points:
+            if elapsed_seconds >= float(point["seconds"]):
+                progress = int(point["progress"])
+        return min(progress, 100)
+
+    def _join_public_url(self, path: str) -> str:
+        """拼接 PUBLIC_BASE_URL 和路径，避免硬编码公网 host。"""
+
+        return self._settings.public_base_url.rstrip("/") + path

@@ -1,0 +1,26 @@
+{
+  "enabled": true,
+  "sheets": [
+    "sheet_01",
+    "sheet_02",
+    "sheet_03",
+    "sheet_04",
+    "sheet_05",
+    "sheet_06"
+  ],
+  "postprocess": {
+    "enabled": true,
+    "processing_duration_seconds": 6,
+    "progress_points": [
+      {"seconds": 0, "progress": 20},
+      {"seconds": 2, "progress": 60},
+      {"seconds": 4, "progress": 90},
+      {"seconds": 6, "progress": 100}
+    ]
+  },
+  "mock_media": {
+    "enabled": true,
+    "stream_format": "m3u8",
+    "result_format": "mp4"
+  }
+}

@@ -1,0 +1,411 @@
+{
+  "site_id": "local_development",
+  "sheets": [
+    {
+      "sheet_id": "sheet_01",
+      "enabled": true,
+      "position_lane_id": null,
+      "trigger_lane_id": null,
+      "direction_zones": {
+        "A": null,
+        "B": null
+      }
+    },
+    {
+      "sheet_id": "sheet_02",
+      "enabled": true,
+      "position_lane_id": null,
+      "trigger_lane_id": null,
+      "direction_zones": {
+        "A": null,
+        "B": null
+      }
+    },
+    {
+      "sheet_id": "sheet_03",
+      "enabled": true,
+      "position_lane_id": null,
+      "trigger_lane_id": null,
+      "direction_zones": {
+        "A": null,
+        "B": null
+      }
+    },
+    {
+      "sheet_id": "sheet_04",
+      "enabled": true,
+      "position_lane_id": null,
+      "trigger_lane_id": null,
+      "direction_zones": {
+        "A": null,
+        "B": null
+      }
+    },
+    {
+      "sheet_id": "sheet_05",
+      "enabled": true,
+      "position_lane_id": null,
+      "trigger_lane_id": null,
+      "direction_zones": {
+        "A": null,
+        "B": null
+      }
+    },
+    {
+      "sheet_id": "sheet_06",
+      "enabled": true,
+      "position_lane_id": null,
+      "trigger_lane_id": null,
+      "direction_zones": {
+        "A": null,
+        "B": null
+      }
+    }
+  ],
+  "lane_mappings": [
+    {
+      "lane_id": "curlingLane1Data",
+      "sheet_id": "sheet_01"
+    },
+    {
+      "lane_id": "curlingLane2Data",
+      "sheet_id": "sheet_02"
+    },
+    {
+      "lane_id": "curlingLane3Data",
+      "sheet_id": "sheet_03"
+    },
+    {
+      "lane_id": "curlingLane4Data",
+      "sheet_id": "sheet_04"
+    },
+    {
+      "lane_id": "curlingLane5Data",
+      "sheet_id": "sheet_05"
+    },
+    {
+      "lane_id": "curlingLane6Data",
+      "sheet_id": "sheet_06"
+    }
+  ],
+  "cameras": [
+    {
+      "camera_id": "overview_A",
+      "camera_role": "overview",
+      "sheet_id": null,
+      "install_end": null,
+      "source_provider": "local_file",
+      "source_config": {
+        "path": "data/test/overview_A.mp4"
+      }
+    },
+    {
+      "camera_id": "overview_B",
+      "camera_role": "overview",
+      "sheet_id": null,
+      "install_end": null,
+      "source_provider": "local_file",
+      "source_config": {
+        "path": "data/test/overview_B.mp4"
+      }
+    },
+    {
+      "camera_id": "sheet_01_me_A",
+      "camera_role": "medium_shot",
+      "sheet_id": "sheet_01",
+      "install_end": "A",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_01_me_B",
+      "camera_role": "medium_shot",
+      "sheet_id": "sheet_01",
+      "install_end": "B",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_02_me_A",
+      "camera_role": "medium_shot",
+      "sheet_id": "sheet_02",
+      "install_end": "A",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_02_me_B",
+      "camera_role": "medium_shot",
+      "sheet_id": "sheet_02",
+      "install_end": "B",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_03_me_A",
+      "camera_role": "medium_shot",
+      "sheet_id": "sheet_03",
+      "install_end": "A",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_03_me_B",
+      "camera_role": "medium_shot",
+      "sheet_id": "sheet_03",
+      "install_end": "B",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_04_me_A",
+      "camera_role": "medium_shot",
+      "sheet_id": "sheet_04",
+      "install_end": "A",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_04_me_B",
+      "camera_role": "medium_shot",
+      "sheet_id": "sheet_04",
+      "install_end": "B",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_05_me_A",
+      "camera_role": "medium_shot",
+      "sheet_id": "sheet_05",
+      "install_end": "A",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_05_me_B",
+      "camera_role": "medium_shot",
+      "sheet_id": "sheet_05",
+      "install_end": "B",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_06_me_A",
+      "camera_role": "medium_shot",
+      "sheet_id": "sheet_06",
+      "install_end": "A",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_06_me_B",
+      "camera_role": "medium_shot",
+      "sheet_id": "sheet_06",
+      "install_end": "B",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_01_cl_A",
+      "camera_role": "close_shot",
+      "sheet_id": "sheet_01",
+      "install_end": "A",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_01_cl_B",
+      "camera_role": "close_shot",
+      "sheet_id": "sheet_01",
+      "install_end": "B",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_02_cl_A",
+      "camera_role": "close_shot",
+      "sheet_id": "sheet_02",
+      "install_end": "A",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_02_cl_B",
+      "camera_role": "close_shot",
+      "sheet_id": "sheet_02",
+      "install_end": "B",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_03_cl_A",
+      "camera_role": "close_shot",
+      "sheet_id": "sheet_03",
+      "install_end": "A",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_03_cl_B",
+      "camera_role": "close_shot",
+      "sheet_id": "sheet_03",
+      "install_end": "B",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_04_cl_A",
+      "camera_role": "close_shot",
+      "sheet_id": "sheet_04",
+      "install_end": "A",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_04_cl_B",
+      "camera_role": "close_shot",
+      "sheet_id": "sheet_04",
+      "install_end": "B",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_05_cl_A",
+      "camera_role": "close_shot",
+      "sheet_id": "sheet_05",
+      "install_end": "A",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_05_cl_B",
+      "camera_role": "close_shot",
+      "sheet_id": "sheet_05",
+      "install_end": "B",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_06_cl_A",
+      "camera_role": "close_shot",
+      "sheet_id": "sheet_06",
+      "install_end": "A",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_06_cl_B",
+      "camera_role": "close_shot",
+      "sheet_id": "sheet_06",
+      "install_end": "B",
+      "source_provider": "local_file",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_01_house_A",
+      "camera_role": "house_top",
+      "sheet_id": "sheet_01",
+      "install_end": "A",
+      "source_provider": "fusion_server",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_01_house_B",
+      "camera_role": "house_top",
+      "sheet_id": "sheet_01",
+      "install_end": "B",
+      "source_provider": "fusion_server",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_02_house_A",
+      "camera_role": "house_top",
+      "sheet_id": "sheet_02",
+      "install_end": "A",
+      "source_provider": "fusion_server",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_02_house_B",
+      "camera_role": "house_top",
+      "sheet_id": "sheet_02",
+      "install_end": "B",
+      "source_provider": "fusion_server",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_03_house_A",
+      "camera_role": "house_top",
+      "sheet_id": "sheet_03",
+      "install_end": "A",
+      "source_provider": "fusion_server",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_03_house_B",
+      "camera_role": "house_top",
+      "sheet_id": "sheet_03",
+      "install_end": "B",
+      "source_provider": "fusion_server",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_04_house_A",
+      "camera_role": "house_top",
+      "sheet_id": "sheet_04",
+      "install_end": "A",
+      "source_provider": "fusion_server",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_04_house_B",
+      "camera_role": "house_top",
+      "sheet_id": "sheet_04",
+      "install_end": "B",
+      "source_provider": "fusion_server",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_05_house_A",
+      "camera_role": "house_top",
+      "sheet_id": "sheet_05",
+      "install_end": "A",
+      "source_provider": "fusion_server",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_05_house_B",
+      "camera_role": "house_top",
+      "sheet_id": "sheet_05",
+      "install_end": "B",
+      "source_provider": "fusion_server",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_06_house_A",
+      "camera_role": "house_top",
+      "sheet_id": "sheet_06",
+      "install_end": "A",
+      "source_provider": "fusion_server",
+      "source_config": {}
+    },
+    {
+      "camera_id": "sheet_06_house_B",
+      "camera_role": "house_top",
+      "sheet_id": "sheet_06",
+      "install_end": "B",
+      "source_provider": "fusion_server",
+      "source_config": {}
+    }
+  ],
+  "microphones": [],
+  "stone_registry": [
+    {
+      "stone_id": "stone_001",
+      "tag_id": null
+    }
+  ],
+  "calibration": {
+    "throw_zones": {}
+  }
+}
