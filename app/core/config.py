@@ -43,6 +43,8 @@ class SiteSheetConfig(BaseModel):
     """现场赛道配置。"""
 
     sheet_id: str
+    sheet_name: str | None = None
+    preview_url: str | None = None
     enabled: bool = True
     position_lane_id: str | None = None
     trigger_lane_id: str | None = None
@@ -77,6 +79,7 @@ class SiteCameraConfig(BaseModel):
     sheet_id: str | None = None
     install_end: str | None = None
     source_provider: str
+    description: str | None = None
     source_config: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("install_end")
@@ -208,6 +211,19 @@ class ConfigManager:
         self.site_config = SiteConfig.model_validate(settings.site_config)
         self.integration_mock_config = IntegrationMockConfig.model_validate(settings.integration_mock_config)
 
+
+    def get_sheet(self, sheet_id: str) -> SiteSheetConfig:
+        """按 sheet_id 获取赛道配置。"""
+
+        for sheet in self.site_config.sheets:
+            if sheet.sheet_id == sheet_id:
+                return sheet
+        raise KeyError(f"sheet_id not found in site_config: {sheet_id}")
+
+    def get_overview_camera_ids(self) -> list[str]:
+        """读取所有全景 camera_id，供 V2 自动选择内部导播输入。"""
+
+        return [camera.camera_id for camera in self.site_config.cameras if camera.camera_role == "overview"]
     def get_camera(self, camera_id: str) -> SiteCameraConfig:
         """按 camera_id 获取现场摄像头配置。"""
 
@@ -358,3 +374,5 @@ def get_config_manager() -> ConfigManager:
     """加载并缓存 ConfigManager。"""
 
     return ConfigManager(get_settings())
+
+

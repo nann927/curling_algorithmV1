@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from fastapi.responses import JSONResponse
 
-from app.api import director, edit, match
+from app.api import director, edit, match, site
 from app.core.config import get_settings
 from app.core.logger import configure_logging
 from app.storage.database import init_db
@@ -69,6 +69,7 @@ def create_app() -> FastAPI:
             return PlainTextResponse(body, media_type="application/vnd.apple.mpegurl")
         return PlainTextResponse("integration mock media", media_type="text/plain")
 
+    app.include_router(site.router)
     app.include_router(match.router)
     app.include_router(director.router)
     app.include_router(edit.router)
@@ -76,3 +77,5 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+

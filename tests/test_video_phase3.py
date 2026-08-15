@@ -9,26 +9,24 @@ from app.adapters.video.ffmpeg import FFmpegProcessManager
 from app.adapters.video.local_file import LocalFileVideoProvider
 from app.core.config import get_config_manager
 from app.core.runtime import runtime_manager
-from app.main import app
+from app.main import create_app
 from app.services.video_source_manager import video_source_manager
 from app.utils.process import ProcessManager
 
 
-client = TestClient(app)
+def _client() -> TestClient:
+    return TestClient(create_app())
 
 
-def _training_payload(match_id: str, overview_camera: str) -> dict:
-    """构造训练类全景视频请求。"""
+def _training_payload(match_id: str) -> dict:
+    """构造 V2 训练类全景视频请求。"""
 
     return {
         "action": "start",
         "match_id": match_id,
+        "sheet_id": "sheet_01",
         "scene_type": "personal_training",
-        "start_time": "2026-08-06T10:00:00+08:00",
-        "camera_config": {
-            "overview_cameras": [overview_camera],
-            "sheets": [{"sheet_id": "sheet_01"}],
-        },
+        "start_time": "2026-08-15T10:00:00+08:00",
     }
 
 
@@ -71,39 +69,22 @@ def test_ffmpeg_manager_detects_binaries_and_stops_local_provider() -> None:
     assert managed.exit_code is not None
 
 
-def test_overview_update_config_switches_local_video_source() -> None:
-    """update_config 应停止旧视频源，启动新 camera_id 对应的视频源。"""
+def test_overview_start_and_stop_local_video_source() -> None:
+    """V2 start 应启动当前赛道唯一全景源，stop 应回收视频源。"""
 
-    response = client.post("/api/v1/match/control", json=_training_payload("phase3_update", "overview_A"))
+    client = _client()
+    response = client.post("/api/v1/match/control", json=_training_payload("phase3_update"))
     assert response.status_code == 200
     start_data = response.json()["data"]
-    assert start_data["outputs"][0]["stream_type"] == "overview_live"
-    assert "overview_A" in start_data["outputs"][0]["media_url"]
+    assert start_data["stream_type"] == "overview_live"
+    assert "overview_A" in start_data["media_url"]
 
     match = runtime_manager.get_match("phase3_update")
+    assert match.sheet_id == "sheet_01"
     assert match.sheets["sheet_01"].current_camera_id == "overview_A"
-    first_handle = video_source_manager.get_handle("phase3_update", "sheet_01")
-    assert first_handle is not None
-    assert first_handle.process_id is not None
-
-    update_payload = {
-        "action": "update_config",
-        "match_id": "phase3_update",
-        "camera_config": {
-            "overview_cameras": ["overview_B"],
-            "sheets": [{"sheet_id": "sheet_01"}],
-        },
-    }
-    response = client.post("/api/v1/match/control", json=update_payload)
-    assert response.status_code == 200
-    update_data = response.json()["data"]
-    assert "overview_B" in update_data["outputs"][0]["media_url"]
-
-    match = runtime_manager.get_match("phase3_update")
-    assert match.sheets["sheet_01"].current_camera_id == "overview_B"
-    second_handle = video_source_manager.get_handle("phase3_update", "sheet_01")
-    assert second_handle is not None
-    assert second_handle.process_id != first_handle.process_id
+    handle = video_source_manager.get_handle("phase3_update", "sheet_01")
+    assert handle is not None
+    assert handle.process_id is not None
 
     response = client.post("/api/v1/match/control", json={"action": "stop", "match_id": "phase3_update"})
     assert response.status_code == 200

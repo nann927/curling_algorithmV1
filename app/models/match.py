@@ -21,18 +21,17 @@ class PlayerInfo(BaseModel):
 
 
 class SheetCameraConfig(BaseModel):
-    """单条赛道的摄像头启用配置。"""
+    """兼容旧字段的单赛道配置。V2 正式业务不再使用多 sheets。"""
 
     sheet_id: str
-    # 竞赛场景必填；训练类场景可为空，因为实时阶段只使用全景。
     house_camera_ends: list[Literal["A", "B"]] = Field(default_factory=list)
 
 
 class CameraConfig(BaseModel):
-    """一次 match 当前完整有效的摄像头配置。"""
+    """兼容旧 camera_config；V2 start 不要求软件传该字段。"""
 
-    overview_cameras: list[str]
-    sheets: list[SheetCameraConfig]
+    overview_cameras: list[str] = Field(default_factory=list)
+    sheets: list[SheetCameraConfig] = Field(default_factory=list)
 
 
 class MatchControlRequest(BaseModel):
@@ -40,6 +39,7 @@ class MatchControlRequest(BaseModel):
 
     action: Literal["start", "update_config", "stop"]
     match_id: str
+    sheet_id: str | None = None
     scene_type: str | None = None
     start_time: str | None = None
     teams: list[TeamInfo] | None = None

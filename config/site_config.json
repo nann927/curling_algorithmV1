@@ -9,7 +9,9 @@
       "direction_zones": {
         "A": null,
         "B": null
-      }
+      },
+      "sheet_name": "1号赛道",
+      "preview_url": null
     },
     {
       "sheet_id": "sheet_02",
@@ -19,7 +21,9 @@
       "direction_zones": {
         "A": null,
         "B": null
-      }
+      },
+      "sheet_name": "2号赛道",
+      "preview_url": null
     },
     {
       "sheet_id": "sheet_03",
@@ -29,7 +33,9 @@
       "direction_zones": {
         "A": null,
         "B": null
-      }
+      },
+      "sheet_name": "3号赛道",
+      "preview_url": null
     },
     {
       "sheet_id": "sheet_04",
@@ -39,7 +45,9 @@
       "direction_zones": {
         "A": null,
         "B": null
-      }
+      },
+      "sheet_name": "4号赛道",
+      "preview_url": null
     },
     {
       "sheet_id": "sheet_05",
@@ -49,7 +57,9 @@
       "direction_zones": {
         "A": null,
         "B": null
-      }
+      },
+      "sheet_name": "5号赛道",
+      "preview_url": null
     },
     {
       "sheet_id": "sheet_06",
@@ -59,7 +69,9 @@
       "direction_zones": {
         "A": null,
         "B": null
-      }
+      },
+      "sheet_name": "6号赛道",
+      "preview_url": null
     }
   ],
   "lane_mappings": [

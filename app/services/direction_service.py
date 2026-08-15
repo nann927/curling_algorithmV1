@@ -1,6 +1,6 @@
 """投壶方向判断服务。
 
-Phase 4 一期规则：
+Phase 4/5 一期规则：
 - TriggerEvent 负责 touch/departure/stop 等投壶事件；
 - StonePosition 只在 touch→departure 窗口内用于判断 A/B 发球区；
 - 不根据 Position 推断运动、入营、停止、碰撞或速度。
@@ -17,16 +17,18 @@ from app.models.stone import StonePosition
 
 
 UNKNOWN_DIRECTION = "UNKNOWN"
+DEFAULT_MATCH_ID = "__default_match__"
 
 
 @dataclass
 class DirectionState:
-    """单条赛道的方向检测状态。
+    """单次投壶的方向检测状态。
 
-    DirectionService 自己维护临时状态，Runtime 只保存对外有用的摘要字段。
+    DirectionService 内部按 match_id + sheet_id 维护状态；保留 sheet_id 字段是为了兼容 Phase 4 测试。
     """
 
     sheet_id: str
+    match_id: str = DEFAULT_MATCH_ID
     status: str = DirectionStatus.UNKNOWN.value
     candidate_source_end: str | None = None
     source_end: str | None = None
@@ -54,25 +56,27 @@ class DirectionService:
         self._max_position_age_ms = max_position_age_ms or int(direction_config.get("max_position_age_ms", 1000))
         self._direction_zones_by_sheet = direction_zones_by_sheet or {}
         self._config_manager = config_manager or get_config_manager()
-        self._states: dict[str, DirectionState] = {}
+        self._states: dict[tuple[str, str], DirectionState] = {}
 
-    def start_monitoring(self, sheet_id: str) -> DirectionState:
+    def start_monitoring(self, sheet_id: str, match_id: str | None = None) -> DirectionState:
         """touch 到达后开启方向检测窗口。"""
 
-        state = DirectionState(sheet_id=sheet_id, status=DirectionStatus.DETECTING.value)
-        self._states[sheet_id] = state
+        key = self._key(sheet_id, match_id)
+        state = DirectionState(sheet_id=sheet_id, match_id=key[0], status=DirectionStatus.DETECTING.value)
+        self._states[key] = state
         return state
 
-    def update_position(self, position: StonePosition) -> DirectionState:
+    def update_position(self, position: StonePosition, match_id: str | None = None) -> DirectionState:
         """持续接收定位数据并做轻量稳定确认。
 
         UNKNOWN 抖动不会清空已有候选方向；LOCKED/FROZEN 后不会被后续定位随意改写。
         """
 
-        state = self._states.get(position.sheet_id)
+        key = self._key(position.sheet_id, match_id)
+        state = self._states.get(key)
         if state is None:
-            state = DirectionState(sheet_id=position.sheet_id)
-            self._states[position.sheet_id] = state
+            state = DirectionState(sheet_id=position.sheet_id, match_id=key[0])
+            self._states[key] = state
         if state.status in (DirectionStatus.LOCKED.value, DirectionStatus.FROZEN.value):
             state.last_position = position
             state.last_update_time = position.timestamp
@@ -96,16 +100,18 @@ class DirectionService:
             self._lock_state(state, source_end)
         return state
 
-    def get_direction(self, sheet_id: str) -> DirectionState:
-        """读取指定赛道当前方向状态。"""
+    def get_direction(self, sheet_id: str, match_id: str | None = None) -> DirectionState:
+        """读取指定 match/sheet 当前方向状态。"""
 
-        return self._states.get(sheet_id) or DirectionState(sheet_id=sheet_id)
+        key = self._key(sheet_id, match_id)
+        return self._states.get(key) or DirectionState(sheet_id=sheet_id, match_id=key[0])
 
-    def freeze_direction(self, sheet_id: str, timestamp: int | None = None) -> DirectionState:
+    def freeze_direction(self, sheet_id: str, timestamp: int | None = None, match_id: str | None = None) -> DirectionState:
         """departure 到达时冻结本次投壶方向。"""
 
-        state = self._states.get(sheet_id) or DirectionState(sheet_id=sheet_id)
-        self._states[sheet_id] = state
+        key = self._key(sheet_id, match_id)
+        state = self._states.get(key) or DirectionState(sheet_id=sheet_id, match_id=key[0])
+        self._states[key] = state
         if state.status == DirectionStatus.LOCKED.value:
             state.status = DirectionStatus.FROZEN.value
             return state
@@ -120,12 +126,18 @@ class DirectionService:
         state.status = DirectionStatus.FROZEN.value
         return state
 
-    def reset(self, sheet_id: str) -> DirectionState:
+    def reset(self, sheet_id: str, match_id: str | None = None) -> DirectionState:
         """显式重置赛道方向状态。"""
 
-        state = DirectionState(sheet_id=sheet_id)
-        self._states[sheet_id] = state
+        key = self._key(sheet_id, match_id)
+        state = DirectionState(sheet_id=sheet_id, match_id=key[0])
+        self._states[key] = state
         return state
+
+    def _key(self, sheet_id: str, match_id: str | None) -> tuple[str, str]:
+        """统一状态键；未传 match_id 时走默认 key，保持旧测试兼容。"""
+
+        return (match_id or DEFAULT_MATCH_ID, sheet_id)
 
     def _lock_state(self, state: DirectionState, source_end: str) -> None:
         """锁定 A_TO_B 或 B_TO_A。"""

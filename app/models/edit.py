@@ -20,6 +20,13 @@ class EditStatusData(BaseModel):
     sheets: list[SheetEditStatus]
 
 
+class EditControlRequest(BaseModel):
+    """POST /api/v1/edit/control 的请求体。"""
+
+    action: str
+    match_id: str
+
+
 class MediaResult(BaseModel):
     """IF-04 返回的单个成品元数据。"""
 

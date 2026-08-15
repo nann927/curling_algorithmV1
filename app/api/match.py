@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.models.match import ApiResponse, MatchControlRequest
 from app.services.match_service import MatchService
+from app.storage.match_record_repository import MatchRecordRepository
 
 router = APIRouter(prefix="/api/v1/match", tags=["match"])
 
@@ -16,8 +17,13 @@ async def control_match(request: MatchControlRequest) -> ApiResponse:
         data = MatchService().control(request)
         return ApiResponse(data=data)
     except KeyError as exc:
-        # 不存在的 match_id 统一转为 404。
         raise HTTPException(status_code=404, detail={"code": 404, "message": str(exc), "data": {}}) from exc
     except ValueError as exc:
-        # 参数合法但业务状态不允许时统一转为 400。
         raise HTTPException(status_code=400, detail={"code": 400, "message": str(exc), "data": {}}) from exc
+
+
+@router.get("/history", response_model=ApiResponse)
+async def get_match_history() -> ApiResponse:
+    """返回算法服务器实际执行过的历史导播记录。"""
+
+    return ApiResponse(data={"records": MatchRecordRepository().list_all()})

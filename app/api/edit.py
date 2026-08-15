@@ -2,10 +2,27 @@
 
 from fastapi import APIRouter, HTTPException
 
+from app.models.edit import EditControlRequest
 from app.models.match import ApiResponse
 from app.services.output_service import OutputService
+from app.services.postprocess_service import PostProcessService
 
 router = APIRouter(prefix="/api/v1/edit", tags=["edit"])
+
+
+@router.post("/control", response_model=ApiResponse)
+async def control_edit(request: EditControlRequest) -> ApiResponse:
+    """软件方主动发起剪辑。"""
+
+    try:
+        if request.action != "start":
+            raise ValueError("only action=start is supported")
+        match = PostProcessService().start(request.match_id)
+        return ApiResponse(data={"match_id": match.match_id, "status": match.edit_status, "progress": match.edit_progress})
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail={"code": 404, "message": str(exc), "data": {}}) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail={"code": 400, "message": str(exc), "data": {}}) from exc
 
 
 @router.get("/status", response_model=ApiResponse)

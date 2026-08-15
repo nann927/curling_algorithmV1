@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 
 class LiveOutput(BaseModel):
-    """单条赛道暴露给软件平台的一路实时输出。"""
+    """兼容内部使用的一路实时输出。"""
 
     sheet_id: str
     stream_type: str
@@ -12,9 +12,11 @@ class LiveOutput(BaseModel):
 
 
 class DirectorOutputData(BaseModel):
-    """IF-02 及 start/update_config 响应中的实时输出数据。"""
+    """V2 的单赛道实时输出数据。"""
 
     match_id: str
+    sheet_id: str
     scene_type: str
     status: str
-    outputs: list[LiveOutput]
+    media_url: str
+    stream_type: str | None = None

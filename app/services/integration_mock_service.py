@@ -1,7 +1,7 @@
 """Integration/Mock 联调辅助服务。
 
 该服务只在 APP_ENV=integration 且 MOCK_MODE=true 时生效，用于生成稳定公网 Mock URL 和赛后进度。
-它不替代正式 IF-01～IF-04，只作为内部 Provider/Service 的 Mock 实现。
+它不替代正式接口，只作为内部 Provider/Service 的 Mock 实现。
 """
 
 from __future__ import annotations
@@ -36,11 +36,22 @@ class IntegrationMockService:
 
         return self._clock()
 
+    def preview_media_url(self, sheet_id: str) -> str:
+        """生成 PC 六宫格预览 Mock URL。"""
+
+        fmt = self._config.mock_media.get("stream_format", "m3u8")
+        return self._join_public_url(f"/integration/media/site/{sheet_id}/preview/program.{fmt}")
+
     def live_media_url(self, match_id: str, sheet_id: str, stream_type: str) -> str:
-        """生成 PC 联调用实时节目流 Mock URL。"""
+        """生成 PC 联调用正式导播流 Mock URL。"""
 
         fmt = self._config.mock_media.get("stream_format", "m3u8")
         return self._join_public_url(f"/integration/media/{match_id}/{sheet_id}/{stream_type}/program.{fmt}")
+
+    def record_media_url(self, match_id: str, sheet_id: str) -> str:
+        """生成停止直播后的 Mock 导播录像地址。"""
+
+        return self._join_public_url(f"/integration/media/{match_id}/{sheet_id}/record/program.mp4")
 
     def result_media_url(self, match_id: str, filename: str) -> str:
         """生成 PC 联调用赛后结果 Mock URL。"""

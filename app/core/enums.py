@@ -46,6 +46,7 @@ class RuntimeStatus(StrEnum):
     RUNNING = "running"
     POST_PROCESSING = "post_processing"
     STOPPED = "stopped"
+    COMPLETED = "completed"
     FAILED = "failed"
 
 
@@ -53,6 +54,7 @@ class EditStatus(StrEnum):
     """赛后处理状态，completed 只允许在上传成功后设置。"""
 
     WAITING = "waiting"
+    NOT_STARTED = "not_started"
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -83,3 +85,22 @@ class DirectionStatus(StrEnum):
     DETECTING = "DETECTING"
     LOCKED = "LOCKED"
     FROZEN = "FROZEN"
+
+
+class ThrowStatus(StrEnum):
+    """一次投壶 Shot 的主生命周期状态。"""
+
+    IDLE = "IDLE"
+    TOUCHED = "TOUCHED"
+    RELEASED = "RELEASED"
+    PASSED_MAGNETIC_1 = "PASSED_MAGNETIC_1"
+    PASSED_MAGNETIC_2 = "PASSED_MAGNETIC_2"
+    FINISHED = "FINISHED"
+
+
+class ShotQualityStatus(StrEnum):
+    """Shot 数据质量状态，和主生命周期状态分开维护。"""
+
+    COMPLETE = "complete"
+    INCOMPLETE = "incomplete"
+    ABNORMAL = "abnormal"
