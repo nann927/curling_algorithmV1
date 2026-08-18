@@ -26,6 +26,8 @@ class MatchRecordRepository:
         self,
         *,
         match_id: str,
+        match_name: str,
+        description: str,
         sheet_id: str,
         scene_type: str,
         start_time: str,
@@ -33,7 +35,7 @@ class MatchRecordRepository:
         teams: list[dict[str, Any]] | None = None,
         players: list[dict[str, Any]] | None = None,
     ) -> None:
-        """start 时保存 recording 记录，并持久化后续剪辑需要的队伍和人员上下文。"""
+        """start 时保存 recording 记录，并持久化剪辑所需的比赛元数据和人员上下文。"""
 
         teams_json = json.dumps(teams or [], ensure_ascii=False)
         players_json = json.dumps(players or [], ensure_ascii=False)
@@ -41,12 +43,14 @@ class MatchRecordRepository:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO match_records (
-                    match_id, sheet_id, scene_type, start_time, record_status, edit_status,
-                    media_url, teams_json, players_json, updated_at
-                ) VALUES (?, ?, ?, ?, 'recording', ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    match_id, match_name, description, sheet_id, scene_type, start_time,
+                    record_status, edit_status, media_url, teams_json, players_json, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 'recording', ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 """,
                 (
                     match_id,
+                    match_name,
+                    description,
                     sheet_id,
                     scene_type,
                     start_time,
@@ -69,6 +73,30 @@ class MatchRecordRepository:
                 WHERE match_id = ?
                 """,
                 (end_time, EditStatus.NOT_STARTED.value, record_url, match_id),
+            )
+            conn.commit()
+
+    def update_metadata(
+        self,
+        *,
+        match_id: str,
+        match_name: str,
+        description: str,
+        teams: list[dict[str, Any]] | None = None,
+        players: list[dict[str, Any]] | None = None,
+    ) -> None:
+        """update_config 时同步保存名称、说明和人员上下文，保证重启后 history/edit 可恢复。"""
+
+        teams_json = json.dumps(teams or [], ensure_ascii=False)
+        players_json = json.dumps(players or [], ensure_ascii=False)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE match_records
+                SET match_name = ?, description = ?, teams_json = ?, players_json = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE match_id = ?
+                """,
+                (match_name, description, teams_json, players_json, match_id),
             )
             conn.commit()
 

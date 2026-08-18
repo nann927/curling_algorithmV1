@@ -28,9 +28,14 @@ class SheetCameraConfig(BaseModel):
 
 
 class CameraConfig(BaseModel):
-    """兼容旧 camera_config；V2 start 不要求软件传该字段。"""
+    """软件侧摄像头选择。
+
+    overview_cameras 只接收 overview_A/overview_B 这类阵列逻辑 ID；house_cameras 单独接收
+    各赛道的大本营俯拍 camera_id。算法内部再把阵列逻辑 ID 展开为 me/cl 等细分镜头。
+    """
 
     overview_cameras: list[str] = Field(default_factory=list)
+    house_cameras: list[str] = Field(default_factory=list)
     sheets: list[SheetCameraConfig] = Field(default_factory=list)
 
 
@@ -39,6 +44,8 @@ class MatchControlRequest(BaseModel):
 
     action: Literal["start", "update_config", "stop"]
     match_id: str
+    match_name: str | None = None
+    description: str | None = None
     sheet_id: str | None = None
     scene_type: str | None = None
     start_time: str | None = None

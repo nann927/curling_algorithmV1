@@ -26,9 +26,15 @@ def _start_payload(match_id: str, sheet_id: str = "sheet_01", with_players: bool
     payload = {
         "action": "start",
         "match_id": match_id,
+        "match_name": "Integration Mock 比赛",
+        "description": "公网联调说明",
         "sheet_id": sheet_id,
         "scene_type": "competition",
-        "start_time": "2026-08-15T10:00:00+08:00",
+        "start_time": "2026-08-18T10:00:00+08:00",
+        "camera_config": {
+            "overview_cameras": ["overview_A", "overview_B"],
+            "house_cameras": [f"{sheet_id}_house_A", f"{sheet_id}_house_B"],
+        },
     }
     if with_players:
         payload["teams"] = [{"team_id": "team_red", "team_name": "Red"}]
@@ -58,6 +64,10 @@ def test_integration_config_health_public_base_url_and_resources(monkeypatch) ->
     assert len(resources) == 6
     assert resources[0]["live_status"] == "idle"
     assert resources[0]["preview_url"].startswith("https://algorithm-test.example.com/integration/media/site/")
+    camera_ids = {camera["camera_id"] for camera in resources[0]["cameras"]}
+    assert camera_ids == {"overview_A", "overview_B", "sheet_01_house_A", "sheet_01_house_B"}
+    assert "sheet_01_me_A" not in camera_ids
+    assert "sheet_01_cl_A" not in camera_ids
 
 
 def test_integration_v2_single_sheet_flow(monkeypatch) -> None:
@@ -85,7 +95,14 @@ def test_integration_v2_single_sheet_flow(monkeypatch) -> None:
 
     update = client.post(
         "/api/v1/match/control",
-        json={"action": "update_config", "match_id": "match_integration_001", "sheet_id": "sheet_01", "players": [{"player_id": "p2"}]},
+        json={
+            "action": "update_config",
+            "match_id": "match_integration_001",
+            "sheet_id": "sheet_01",
+            "match_name": "Integration Mock 更新比赛",
+            "description": "公网联调更新说明",
+            "players": [{"player_id": "p2"}],
+        },
     )
     assert update.status_code == 200
     bad_update = client.post(
@@ -107,6 +124,8 @@ def test_integration_v2_single_sheet_flow(monkeypatch) -> None:
 
     history = client.get("/api/v1/match/history").json()["data"]["records"]
     record = next(item for item in history if item["match_id"] == "match_integration_001")
+    assert record["match_name"] == "Integration Mock 更新比赛"
+    assert record["description"] == "公网联调更新说明"
     assert record["record_status"] == "completed"
     assert record["edit_status"] == "not_started"
 

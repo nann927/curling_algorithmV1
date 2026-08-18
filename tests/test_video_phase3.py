@@ -24,6 +24,8 @@ def _training_payload(match_id: str) -> dict:
     return {
         "action": "start",
         "match_id": match_id,
+        "match_name": "Phase 3 本地视频源测试",
+        "description": "本地 MP4 overview 链路验证",
         "sheet_id": "sheet_01",
         "scene_type": "personal_training",
         "start_time": "2026-08-15T10:00:00+08:00",

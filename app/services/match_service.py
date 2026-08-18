@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from app.core.config import ConfigManager, get_config_manager
 from app.core.enums import OVERVIEW_SCENES, ControlAction, RuntimeStatus, SceneType
 from app.core.runtime import MatchRuntime, SheetRuntime, runtime_manager
-from app.models.match import MatchControlRequest
+from app.models.match import CameraConfig, MatchControlRequest
 from app.models.media import DirectorOutputData
 from app.services.director_service import DirectorService
 from app.services.integration_mock_service import IntegrationMockService
@@ -57,21 +57,28 @@ class MatchService:
         assert request.start_time is not None
         assert request.sheet_id is not None
 
-        sheet = self._build_sheet(request.match_id, request.scene_type, request.sheet_id)
+        match_name = self._normalize_match_name(request.match_name, required=True)
+        description = self._normalize_description(request.description)
+        camera_config = self._effective_camera_config(request.camera_config)
+        sheet = self._build_sheet(request.match_id, request.scene_type, request.sheet_id, camera_config)
         match = MatchRuntime(
             match_id=request.match_id,
             sheet_id=request.sheet_id,
             scene_type=request.scene_type,
             start_time=request.start_time,
+            match_name=match_name,
+            description=description,
             teams=[team.model_dump() for team in request.teams or []],
             players=[player.model_dump() for player in request.players or []],
-            camera_config=request.camera_config.model_dump() if request.camera_config else {},
+            camera_config=camera_config.model_dump(),
             sheets={request.sheet_id: sheet},
             media_url=sheet.media_url,
         )
         runtime_manager.create_match(match)
         self._records.upsert_started(
             match_id=match.match_id,
+            match_name=match.match_name,
+            description=match.description,
             sheet_id=match.sheet_id or request.sheet_id,
             scene_type=match.scene_type,
             start_time=match.start_time,
@@ -89,11 +96,34 @@ class MatchService:
             raise ValueError("only running match can be updated")
         if request.sheet_id is not None and request.sheet_id != match.sheet_id:
             raise ValueError("sheet_id cannot be changed after start")
-        runtime_manager.update_match_config(
+
+        camera_config_data = match.camera_config
+        sheets = None
+        if request.camera_config is not None:
+            camera_config = request.camera_config
+            camera_config_data = camera_config.model_dump()
+            if match.scene_type == SceneType.COMPETITION.value:
+                assert match.sheet_id is not None
+                sheet = self._build_sheet(match.match_id, match.scene_type, match.sheet_id, camera_config)
+                sheets = {match.sheet_id: sheet}
+
+        match_name = self._normalize_match_name(request.match_name, required=False)
+        description = self._normalize_description(request.description) if request.description is not None else None
+        updated = runtime_manager.update_match_config(
             match_id=match.match_id,
-            camera_config=request.camera_config.model_dump() if request.camera_config else match.camera_config,
+            camera_config=camera_config_data,
+            sheets=sheets,
             teams=[team.model_dump() for team in request.teams] if request.teams is not None else None,
             players=[player.model_dump() for player in request.players] if request.players is not None else None,
+            match_name=match_name,
+            description=description,
+        )
+        self._records.update_metadata(
+            match_id=updated.match_id,
+            match_name=updated.match_name,
+            description=updated.description,
+            teams=updated.teams,
+            players=updated.players,
         )
         return self._output.get_director_output(match.match_id)
 
@@ -117,20 +147,54 @@ class MatchService:
             "record_url": record_url,
         }
 
-    def _build_sheet(self, match_id: str, scene_type: str, sheet_id: str) -> SheetRuntime:
+    def _build_sheet(self, match_id: str, scene_type: str, sheet_id: str, camera_config: CameraConfig) -> SheetRuntime:
         """按场景创建唯一 SheetRuntime。"""
 
         if scene_type == SceneType.COMPETITION.value:
-            return self._director.start_sheet(match_id, sheet_id, ["A", "B"])
-        overview_camera_id = self._select_overview_camera()
+            camera_ids_by_role = self._resolve_competition_cameras(sheet_id, camera_config)
+            return self._director.start_sheet(match_id, sheet_id, camera_ids_by_role)
+        overview_camera_id = self._select_overview_camera(camera_config)
         return self._overview.start_sheet(match_id, sheet_id, [], overview_camera_id)
 
-    def _select_overview_camera(self) -> str:
-        """V2 中软件不再传 camera_id，算法从 site_config 自动选第一路全景。"""
+    def _resolve_competition_cameras(self, sheet_id: str, camera_config: CameraConfig) -> dict[str, list[str]]:
+        """把软件侧逻辑摄像头选择展开为本场导播可用的内部 camera_id。"""
 
-        overview_ids = self._config_manager.get_overview_camera_ids()
+        grouped: dict[str, list[str]] = {}
+        for overview_id in camera_config.overview_cameras:
+            for camera in self._config_manager.get_array_cameras(sheet_id, overview_id):
+                self._append_camera(grouped, camera.camera_role, camera.camera_id)
+        for camera_id in camera_config.house_cameras:
+            try:
+                camera = self._config_manager.get_house_camera(sheet_id, camera_id)
+            except KeyError as exc:
+                raise ValueError(str(exc)) from exc
+            self._append_camera(grouped, camera.camera_role, camera.camera_id)
+        if not grouped:
+            raise ValueError("camera_config must select at least one camera")
+        return grouped
+
+    def _append_camera(self, grouped: dict[str, list[str]], camera_role: str, camera_id: str) -> None:
+        """按角色去重追加 camera_id，避免重复 overview 造成候选列表膨胀。"""
+
+        values = grouped.setdefault(camera_role, [])
+        if camera_id not in values:
+            values.append(camera_id)
+
+    def _effective_camera_config(self, camera_config: CameraConfig | None) -> CameraConfig:
+        """未传 camera_config 时使用两端阵列作为兼容默认值，不自动加入 house_top。"""
+
+        if camera_config is not None:
+            return camera_config
+        return CameraConfig(overview_cameras=self._config_manager.get_overview_camera_ids(), house_cameras=[])
+
+    def _select_overview_camera(self, camera_config: CameraConfig) -> str:
+        """非竞赛场景沿用 overview 输出，优先使用软件传入的第一路 overview。"""
+
+        overview_ids = camera_config.overview_cameras or self._config_manager.get_overview_camera_ids()
         if not overview_ids:
             raise ValueError("overview camera is not configured")
+        # 非竞赛 overview 输出仍使用全局 overview 视频源；非法 ID 由 ConfigManager 校验。
+        self._config_manager.get_overview_install_end(overview_ids[0])
         return overview_ids[0]
 
     def _validate_start(self, request: MatchControlRequest) -> None:
@@ -141,6 +205,7 @@ class MatchService:
         if self._records.get(request.match_id) is not None:
             # match_records 是跨重启的事实来源，历史中出现过的 match_id 不允许再次开播。
             raise ValueError(f"match_id already exists: {request.match_id}")
+        self._normalize_match_name(request.match_name, required=True)
         if not request.sheet_id:
             raise ValueError("sheet_id is required for start")
         self._config_manager.validate_sheet_id(request.sheet_id)
@@ -157,3 +222,19 @@ class MatchService:
         if not request.start_time:
             raise ValueError("start_time is required for start")
 
+    def _normalize_match_name(self, value: str | None, *, required: bool) -> str | None:
+        """统一处理 match_name；start 必填，update_config 传入时也不允许为空。"""
+
+        if value is None:
+            if required:
+                raise ValueError("match_name is required for start")
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("match_name must not be empty")
+        return normalized
+
+    def _normalize_description(self, value: str | None) -> str:
+        """description 可选；传空或未传时按空字符串保存。"""
+
+        return (value or "").strip()

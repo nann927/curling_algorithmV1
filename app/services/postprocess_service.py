@@ -208,6 +208,7 @@ class PostProcessService:
             logger.warning("invalid match record json ignored")
             return []
         return data if isinstance(data, list) else []
+
     def _get_or_restore_match(self, match_id: str) -> MatchRuntime:
         """优先读取 Runtime；重启后可从 match_records 恢复最小剪辑 Runtime。"""
 
@@ -230,6 +231,8 @@ class PostProcessService:
                 sheet_id=record["sheet_id"],
                 scene_type=record["scene_type"],
                 start_time=record["start_time"],
+                match_name=record.get("match_name") or "",
+                description=record.get("description") or "",
                 end_time=record.get("end_time"),
                 media_url=record.get("media_url"),
                 record_url=record.get("record_url"),
@@ -241,6 +244,9 @@ class PostProcessService:
             )
             runtime_manager.create_match(match)
             return match
+
+
+
 
 
 

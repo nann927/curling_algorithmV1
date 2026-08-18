@@ -9,18 +9,24 @@ from app.services.integration_mock_service import IntegrationMockService
 class DirectorService:
     """竞赛场景的实时输出服务。
 
-    Phase 2 只返回稳定 mock URL；后续真实 FFmpeg、切镜和音频融合在该边界内替换。
+    Phase 4.6.2 只修正候选摄像头来源：Director 只能使用软件本场允许的内部镜头集合，
+    真实切镜规则仍留到后续阶段实现。
     """
 
     def __init__(self, config_manager: ConfigManager | None = None, integration_mock: IntegrationMockService | None = None) -> None:
         self._config_manager = config_manager or get_config_manager()
         self._integration_mock = integration_mock or IntegrationMockService()
 
-    def start_sheet(self, match_id: str, sheet_id: str, house_camera_ends: list[str]) -> SheetRuntime:
+    def start_sheet(self, match_id: str, sheet_id: str, camera_ids_by_role: dict[str, list[str]]) -> SheetRuntime:
         """为单条赛道创建 smart_director 输出状态。"""
 
-        camera_ids_by_role = self._config_manager.get_sheet_camera_ids_by_role(sheet_id)
-        current_camera_id = self._select_initial_camera(camera_ids_by_role, house_camera_ends)
+        current_camera_id = self._select_initial_camera(camera_ids_by_role)
+        house_camera_ends = [
+            camera.install_end
+            for camera_id in camera_ids_by_role.get("house_top", [])
+            for camera in [self._config_manager.get_camera(camera_id)]
+            if camera.install_end
+        ]
         return SheetRuntime(
             sheet_id=sheet_id,
             enabled=True,
@@ -38,11 +44,8 @@ class DirectorService:
             return self._integration_mock.live_media_url(match_id, sheet_id, StreamType.SMART_DIRECTOR.value)
         return f"mock://{match_id}/{sheet_id}/smart_director"
 
-    def _select_initial_camera(self, camera_ids_by_role: dict[str, list[str]], house_camera_ends: list[str]) -> str | None:
-        """选择初始镜头 ID。
-
-        当前仍是 Mock 智能导播，只记录配置中的候选镜头；真实切镜规则后续再接入。
-        """
+    def _select_initial_camera(self, camera_ids_by_role: dict[str, list[str]]) -> str | None:
+        """选择初始镜头 ID；只从本场已授权候选镜头里选择。"""
 
         for role in ("house_top", "medium_shot", "close_shot"):
             cameras = camera_ids_by_role.get(role, [])

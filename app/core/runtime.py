@@ -56,6 +56,8 @@ class MatchRuntime:
     match_id: str
     scene_type: str
     start_time: str
+    match_name: str = ""
+    description: str = ""
     sheet_id: str | None = None
     end_time: str | None = None
     media_url: str | None = None
@@ -130,6 +132,8 @@ class RuntimeManager:
         sheets: dict[str, SheetRuntime] | None = None,
         teams: list[dict[str, Any]] | None = None,
         players: list[dict[str, Any]] | None = None,
+        match_name: str | None = None,
+        description: str | None = None,
     ) -> MatchRuntime:
         """更新当前 match 的业务配置；V2 不允许通过 update_config 换赛道。"""
 
@@ -148,6 +152,10 @@ class RuntimeManager:
                 match.teams = teams
             if players is not None:
                 match.players = players
+            if match_name is not None:
+                match.match_name = match_name
+            if description is not None:
+                match.description = description
             return match
 
     def stop_match(self, match_id: str, end_time: str | None = None, record_url: str | None = None) -> MatchRuntime:

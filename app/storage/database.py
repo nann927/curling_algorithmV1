@@ -90,6 +90,8 @@ def init_db(sqlite_path: str) -> None:
                 """
                 CREATE TABLE IF NOT EXISTS match_records (
                     match_id TEXT PRIMARY KEY,
+                    match_name TEXT,
+                    description TEXT,
                     sheet_id TEXT NOT NULL,
                     scene_type TEXT NOT NULL,
                     start_time TEXT NOT NULL,
@@ -111,6 +113,8 @@ def init_db(sqlite_path: str) -> None:
                 {
                     "teams_json": "TEXT",
                     "players_json": "TEXT",
+                    "match_name": "TEXT DEFAULT ''",
+                    "description": "TEXT DEFAULT ''",
                 },
             )
     except sqlite3.OperationalError as exc:

@@ -1,6 +1,6 @@
 """手工联调脚本。
 
-需要先启动服务，然后执行本脚本验证 start/update/output/stop/status/result 全链路。
+需要先启动服务，然后执行本脚本验证 V2 start/update/output/stop/edit/control 全链路。
 """
 
 import json
@@ -38,51 +38,49 @@ def require_success(name: str, response: httpx.Response) -> dict:
 def main() -> None:
     """按固定顺序调用软件平台接口。"""
 
-    # 默认使用时间戳 match_id，避免重复执行脚本时触发重复 start。
+    # 默认使用时间戳 match_id，避免重复执行脚本时触发跨重启唯一性校验。
     match_id = os.getenv("MATCH_ID", f"match_{int(time.time())}")
-    # trust_env=False 可避免 Windows/IDE 环境变量中的 HTTP_PROXY 影响本地 localhost 调用。
     with httpx.Client(base_url=BASE_URL, timeout=5.0, trust_env=False) as client:
         require_success("health", client.get("/health"))
+        require_success("site/resources", client.get("/api/v1/site/resources"))
 
         start_payload = {
             "action": "start",
             "match_id": match_id,
+            "match_name": "手工联调比赛",
+            "description": "手工脚本验证",
+            "sheet_id": "sheet_01",
             "scene_type": "competition",
-            "start_time": "2026-08-06T10:00:00+08:00",
+            "start_time": "2026-08-18T10:00:00+08:00",
+            "camera_config": {
+                "overview_cameras": ["overview_A", "overview_B"],
+                "house_cameras": ["sheet_01_house_A", "sheet_01_house_B"],
+            },
             "teams": [{"team_id": "team_red", "team_name": "Red"}],
             "players": [{"player_id": "player_001", "player_name": "Alice", "team_id": "team_red"}],
-            "camera_config": {
-                "overview_cameras": ["overview_A"],
-                "sheets": [
-                    {"sheet_id": "sheet_01", "house_camera_ends": ["A", "B"]},
-                    {"sheet_id": "sheet_02", "house_camera_ends": ["A"]},
-                ],
-            },
         }
         require_success("start", client.post("/api/v1/match/control", json=start_payload))
 
         update_payload = {
             "action": "update_config",
             "match_id": match_id,
-            "camera_config": {
-                "overview_cameras": ["overview_B"],
-                "sheets": [
-                    {"sheet_id": "sheet_01", "house_camera_ends": ["A", "B"]},
-                    {"sheet_id": "sheet_03", "house_camera_ends": ["B"]},
-                ],
-            },
+            "sheet_id": "sheet_01",
+            "match_name": "手工联调比赛-更新",
+            "description": "手工脚本更新说明",
+            "players": [{"player_id": "player_002"}],
         }
         require_success("update_config", client.post("/api/v1/match/control", json=update_payload))
         require_success("director/output", client.get("/api/v1/director/output", params={"match_id": match_id}))
         require_success("stop", client.post("/api/v1/match/control", json={"action": "stop", "match_id": match_id}))
+        require_success("match/history", client.get("/api/v1/match/history"))
+        require_success("edit/control", client.post("/api/v1/edit/control", json={"action": "start", "match_id": match_id}))
 
         for _ in range(20):
             status = client.get("/api/v1/edit/status", params={"match_id": match_id})
             data = require_success("edit/status", status)
             if data["data"]["status"] == "completed":
                 break
-            # Phase 2 Mock 处理很快；真实剪辑接入后可加长轮询间隔。
-            time.sleep(0.1)
+            time.sleep(0.5)
 
         require_success("edit/result", client.get("/api/v1/edit/result", params={"match_id": match_id}))
 

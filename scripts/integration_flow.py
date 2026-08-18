@@ -43,11 +43,26 @@ def require_failure(name: str, response: httpx.Response) -> None:
         raise SystemExit(f"{name} should fail, status={response.status_code}")
 
 
+def assert_sheet_01_camera_choices(sheet: dict) -> None:
+    """确认资源接口只暴露软件侧可选 camera_id，不暴露 me/cl 内部镜头。"""
+
+    camera_ids = {camera["camera_id"] for camera in sheet["cameras"]}
+    expected = {"overview_A", "overview_B", "sheet_01_house_A", "sheet_01_house_B"}
+    if camera_ids != expected:
+        raise SystemExit(f"sheet_01 camera choices wrong, got={sorted(camera_ids)}")
+    forbidden = {"sheet_01_me_A", "sheet_01_cl_A", "sheet_01_me_B", "sheet_01_cl_B"}
+    if camera_ids & forbidden:
+        raise SystemExit(f"internal cameras should not be exposed, got={sorted(camera_ids & forbidden)}")
+
+
 def main() -> None:
     """执行 V2 resources → start → stop → history → edit/control → result 完整流程。"""
 
     match_id = os.getenv("MATCH_ID", f"match_integration_{int(time.time())}")
     conflict_match_id = f"{match_id}_conflict"
+    start_name = "8月18日冰壶联赛第一场"
+    updated_name = "8月18日冰壶联赛更新场"
+    updated_description = "红队 vs 黄队"
     with httpx.Client(base_url=BASE_URL, timeout=10.0, trust_env=False) as client:
         require_success("health", client.get("/health"))
 
@@ -57,13 +72,20 @@ def main() -> None:
         sheet_01 = next(item for item in resources if item["sheet_id"] == "sheet_01")
         if sheet_01["live_status"] != "idle":
             raise SystemExit(f"sheet_01 should be idle, got {sheet_01['live_status']}")
+        assert_sheet_01_camera_choices(sheet_01)
 
         start_payload = {
             "action": "start",
             "match_id": match_id,
+            "match_name": start_name,
+            "description": "红队 vs 蓝队",
             "sheet_id": "sheet_01",
             "scene_type": "competition",
-            "start_time": "2026-08-15T10:00:00+08:00",
+            "start_time": "2026-08-18T10:00:00+08:00",
+            "camera_config": {
+                "overview_cameras": ["overview_A", "overview_B"],
+                "house_cameras": ["sheet_01_house_A", "sheet_01_house_B"],
+            },
             "teams": [{"team_id": "team_red", "team_name": "Red"}],
             "players": [{"player_id": "player_001", "player_name": "Alice", "team_id": "team_red"}],
         }
@@ -86,7 +108,14 @@ def main() -> None:
             "update_config",
             client.post(
                 "/api/v1/match/control",
-                json={"action": "update_config", "match_id": match_id, "sheet_id": "sheet_01", "players": [{"player_id": "player_002"}]},
+                json={
+                    "action": "update_config",
+                    "match_id": match_id,
+                    "sheet_id": "sheet_01",
+                    "match_name": updated_name,
+                    "description": updated_description,
+                    "players": [{"player_id": "player_002"}],
+                },
             ),
         )
         require_failure(
@@ -105,6 +134,8 @@ def main() -> None:
         record = next((item for item in history if item["match_id"] == match_id), None)
         if record is None or record["record_status"] != "completed" or record["edit_status"] != "not_started":
             raise SystemExit("history record is invalid")
+        if record["match_name"] != updated_name or record["description"] != updated_description:
+            raise SystemExit("history match metadata is invalid")
 
         status = require_success("edit/status before control", client.get("/api/v1/edit/status", params={"match_id": match_id}))["data"]
         if status["status"] != "not_started":

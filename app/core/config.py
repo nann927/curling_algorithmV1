@@ -13,6 +13,10 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+ARRAY_CAMERA_ROLES = {"medium_shot", "close_shot"}
+OVERVIEW_INSTALL_ENDS = {"overview_A": "A", "overview_B": "B"}
+
+
 class Settings(BaseSettings):
     """运行配置。
 
@@ -221,9 +225,43 @@ class ConfigManager:
         raise KeyError(f"sheet_id not found in site_config: {sheet_id}")
 
     def get_overview_camera_ids(self) -> list[str]:
-        """读取所有全景 camera_id，供 V2 自动选择内部导播输入。"""
+        """读取软件侧可选择的阵列逻辑 ID。"""
 
         return [camera.camera_id for camera in self.site_config.cameras if camera.camera_role == "overview"]
+
+    def get_overview_install_end(self, overview_id: str) -> str:
+        """把 overview_A/overview_B 映射为 A/B 端位；非法逻辑 ID 必须显式拒绝。"""
+
+        if overview_id not in OVERVIEW_INSTALL_ENDS:
+            raise ValueError(f"unsupported overview camera: {overview_id}")
+        camera = self.get_camera(overview_id)
+        if camera.camera_role != "overview":
+            raise ValueError(f"camera is not overview logical camera: {overview_id}")
+        return OVERVIEW_INSTALL_ENDS[overview_id]
+
+    def get_array_cameras(self, sheet_id: str, overview_id: str) -> list[SiteCameraConfig]:
+        """按 sheet_id 和 overview_A/B 展开当前赛道对应端位的阵列内部细分镜头。
+
+        阵列内部只包含 medium_shot、close_shot 等角色；house_top 是独立大本营俯拍，不在这里自动加入。
+        """
+
+        install_end = self.get_overview_install_end(overview_id)
+        return [
+            camera
+            for camera in self.get_sheet_cameras(sheet_id, install_end=install_end)
+            if camera.camera_role in ARRAY_CAMERA_ROLES
+        ]
+
+    def get_house_camera(self, sheet_id: str, camera_id: str) -> SiteCameraConfig:
+        """校验并返回软件显式选择的单路大本营俯拍摄像头。"""
+
+        camera = self.get_camera(camera_id)
+        if camera.sheet_id != sheet_id:
+            raise ValueError(f"house camera does not belong to sheet: {camera_id}")
+        if camera.camera_role != "house_top":
+            raise ValueError(f"camera is not house_top: {camera_id}")
+        return camera
+
     def get_camera(self, camera_id: str) -> SiteCameraConfig:
         """按 camera_id 获取现场摄像头配置。"""
 
@@ -231,7 +269,6 @@ class ConfigManager:
             if camera.camera_id == camera_id:
                 return camera
         raise KeyError(f"camera_id not found in site_config: {camera_id}")
-
     def get_sheet_cameras(
         self,
         sheet_id: str,
@@ -374,5 +411,8 @@ def get_config_manager() -> ConfigManager:
     """加载并缓存 ConfigManager。"""
 
     return ConfigManager(get_settings())
+
+
+
 
 
