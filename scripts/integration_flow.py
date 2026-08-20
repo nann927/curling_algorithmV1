@@ -6,11 +6,13 @@
 import json
 import os
 import time
+from pathlib import Path
 
 import httpx
 
 
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
+CONFIG_PATH = Path(os.getenv("INTEGRATION_MOCK_PATH", "config/integration_mock.json"))
 
 
 def dump(name: str, response: httpx.Response) -> dict | None:
@@ -43,6 +45,13 @@ def require_failure(name: str, response: httpx.Response) -> None:
         raise SystemExit(f"{name} should fail, status={response.status_code}")
 
 
+def expected_sheet_media(sheet_id: str) -> dict:
+    """从 integration_mock.json 读取期望媒体地址，避免在 Python 中硬编码 RTSP。"""
+
+    config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    return config.get("sheet_media", {}).get(sheet_id, {})
+
+
 def assert_sheet_01_camera_choices(sheet: dict) -> None:
     """确认资源接口只暴露软件侧可选 camera_id，不暴露 me/cl 内部镜头。"""
 
@@ -63,6 +72,7 @@ def main() -> None:
     start_name = "8月18日冰壶联赛第一场"
     updated_name = "8月18日冰壶联赛更新场"
     updated_description = "红队 vs 黄队"
+    sheet_01_media = expected_sheet_media("sheet_01")
     with httpx.Client(base_url=BASE_URL, timeout=10.0, trust_env=False) as client:
         require_success("health", client.get("/health"))
 
@@ -72,6 +82,8 @@ def main() -> None:
         sheet_01 = next(item for item in resources if item["sheet_id"] == "sheet_01")
         if sheet_01["live_status"] != "idle":
             raise SystemExit(f"sheet_01 should be idle, got {sheet_01['live_status']}")
+        if sheet_01_media.get("preview_url") and sheet_01["preview_url"] != sheet_01_media["preview_url"]:
+            raise SystemExit("sheet_01 preview_url does not match integration_mock.json")
         assert_sheet_01_camera_choices(sheet_01)
 
         start_payload = {
@@ -89,7 +101,11 @@ def main() -> None:
             "teams": [{"team_id": "team_red", "team_name": "Red"}],
             "players": [{"player_id": "player_001", "player_name": "Alice", "team_id": "team_red"}],
         }
-        require_success("start", client.post("/api/v1/match/control", json=start_payload))
+        start = require_success("start", client.post("/api/v1/match/control", json=start_payload))["data"]
+        if sheet_01_media.get("media_url") and start["media_url"] != sheet_01_media["media_url"]:
+            raise SystemExit("sheet_01 media_url does not match integration_mock.json")
+        if sheet_01["preview_url"] == start["media_url"]:
+            raise SystemExit("sheet_01 preview_url and media_url should differ in current integration config")
 
         resources = require_success("site/resources after start", client.get("/api/v1/site/resources"))["data"]["sheets"]
         sheet_01 = next(item for item in resources if item["sheet_id"] == "sheet_01")
@@ -97,7 +113,7 @@ def main() -> None:
             raise SystemExit("sheet_01 running state is wrong")
 
         output = require_success("director/output", client.get("/api/v1/director/output", params={"match_id": match_id}))["data"]
-        if output["sheet_id"] != "sheet_01" or not output["media_url"]:
+        if output["sheet_id"] != "sheet_01" or output["media_url"] != start["media_url"]:
             raise SystemExit("director/output media_url is invalid")
 
         conflict_payload = dict(start_payload)
@@ -153,7 +169,10 @@ def main() -> None:
         if final_status != "completed":
             raise SystemExit(f"edit/status did not complete, last_status={final_status}")
 
-        require_success("edit/result", client.get("/api/v1/edit/result", params={"match_id": match_id}))
+        result = require_success("edit/result", client.get("/api/v1/edit/result", params={"match_id": match_id}))["data"]
+        for item in result["results"]:
+            if "duration_seconds" not in item or not isinstance(item["duration_seconds"], (int, float)) or item["duration_seconds"] <= 0:
+                raise SystemExit(f"invalid duration_seconds in edit/result: {item}")
 
 
 if __name__ == "__main__":

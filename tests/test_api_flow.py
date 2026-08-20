@@ -43,6 +43,16 @@ def _start_payload(match_id: str = "match_001", sheet_id: str = "sheet_01") -> d
     }
 
 
+
+def _assert_video_results_have_duration(results: list[dict]) -> None:
+    """确认 /edit/result 返回的视频结果包含秒级时长。"""
+
+    assert results
+    for item in results:
+        assert "duration_seconds" in item
+        assert isinstance(item["duration_seconds"], (int, float))
+        assert item["duration_seconds"] > 0
+        assert item["media_url"]
 def test_health_and_site_resources() -> None:
     """健康检查和赛道资源查询应返回软件侧逻辑镜头。"""
 
@@ -154,6 +164,7 @@ def test_v2_start_output_stop_history_edit_flow() -> None:
     result = client.get("/api/v1/edit/result", params={"match_id": "match_001"}).json()["data"]
     assert result["status"] == "completed"
     assert result["results"]
+    _assert_video_results_have_duration(result["results"])
 
 
 def test_v2_error_cases() -> None:
@@ -264,6 +275,7 @@ def test_edit_control_restores_match_context_after_runtime_clear() -> None:
     result_types = {item["result_type"] for item in result["results"]}
     assert "player_highlight" in result_types
     assert "team_highlight" in result_types
+    _assert_video_results_have_duration(result["results"])
 
 
 def test_old_match_records_database_is_migrated(tmp_path: Path) -> None:

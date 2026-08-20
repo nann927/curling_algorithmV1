@@ -151,6 +151,7 @@ class PostProcessService:
                                 "player_id": player.get("player_id"),
                                 "team_id": player.get("team_id"),
                                 "label": player.get("player_name") or player.get("player_id"),
+                                "duration_seconds": self._result_duration_seconds(ResultType.PLAYER_HIGHLIGHT.value),
                                 "local_path": f"data/highlights_temp/{match.match_id}/{sheet_id}_player_highlight.mp4",
                             }
                         )
@@ -162,6 +163,7 @@ class PostProcessService:
                                 "sheet_id": sheet_id,
                                 "team_id": team.get("team_id"),
                                 "label": team.get("team_name") or team.get("team_id"),
+                                "duration_seconds": self._result_duration_seconds(ResultType.TEAM_HIGHLIGHT.value),
                                 "local_path": f"data/highlights_temp/{match.match_id}/{sheet_id}_team_highlight.mp4",
                             }
                         )
@@ -173,6 +175,7 @@ class PostProcessService:
                     "sheet_id": sheet_id,
                     "clip_id": f"{sheet_id}_clip_0001",
                     "label": "person_001",
+                    "duration_seconds": self._result_duration_seconds(ResultType.LABELED_CLIP.value),
                     "local_path": f"data/clips/{match.match_id}/{sheet_id}/clip_0001.mp4",
                 }
                 for sheet_id in sheet_ids
@@ -192,10 +195,16 @@ class PostProcessService:
                     "person_label": person_label,
                     "content_category": "training",
                     "label": f"{person_label}-training",
+                    "duration_seconds": self._result_duration_seconds(ResultType.PARTICIPANT_VIDEO.value),
                     "local_path": f"data/participant_media_temp/{match.match_id}/{sheet_id}_participant_video.mp4",
                 }
             )
         return results
+
+    def _result_duration_seconds(self, result_type: str) -> float:
+        """返回成品视频时长，真实剪辑接入后应替换为最终文件 ffprobe 结果。"""
+
+        return self._integration_mock.result_duration_seconds(result_type)
 
     def _load_json_list(self, value: str | None) -> list[dict]:
         """从 match_records 恢复 JSON 列；历史空值或损坏值按空列表处理。"""
@@ -244,6 +253,8 @@ class PostProcessService:
             )
             runtime_manager.create_match(match)
             return match
+
+
 
 
 

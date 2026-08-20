@@ -33,6 +33,8 @@ class MediaResult(BaseModel):
     result_type: str
     sheet_id: str
     media_url: str
+    # 单个成品视频的实际播放时长，单位秒；前端需要 mm:ss 时自行格式化。
+    duration_seconds: float
     player_id: str | None = None
     team_id: str | None = None
     person_label: str | None = None
@@ -49,3 +51,4 @@ class EditResultData(BaseModel):
     result_mode: str | None
     results: list[MediaResult]
     scene_type: str | None = None
+

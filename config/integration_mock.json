@@ -8,6 +8,32 @@
     "sheet_05",
     "sheet_06"
   ],
+  "sheet_media": {
+    "sheet_01": {
+      "preview_url": "rtsp://localhost:8554/test",
+      "media_url": "rtsp://9627b0bf2a7b.entrypoint.cloud.wowza.com:1935/app-p5260J38/66abe4b9_stream1"
+    },
+    "sheet_02": {
+      "preview_url": "rtsp://9627b0bf2a7b.entrypoint.cloud.wowza.com:1935/app-p5260J38/66abe4b9_stream1",
+      "media_url": "rtsp://localhost:8554/test"
+    },
+    "sheet_03": {
+      "preview_url": "rtsp://176.139.87.16/axis-media/media.amp",
+      "media_url": "rtsp://stream.strba.sk:1935/strba/VYHLAD_JAZERO.stream"
+    },
+    "sheet_04": {
+      "preview_url": "rtsp://stream.strba.sk:1935/strba/VYHLAD_JAZERO.stream",
+      "media_url": "rtsp://176.139.87.16/axis-media/media.amp"
+    },
+    "sheet_05": {
+      "preview_url": "rtsp://localhost:8554/test",
+      "media_url": "rtsp://176.139.87.16/axis-media/media.amp"
+    },
+    "sheet_06": {
+      "preview_url": "rtsp://9627b0bf2a7b.entrypoint.cloud.wowza.com:1935/app-p5260J38/66abe4b9_stream1",
+      "media_url": "rtsp://stream.strba.sk:1935/strba/VYHLAD_JAZERO.stream"
+    }
+  },
   "postprocess": {
     "enabled": true,
     "processing_duration_seconds": 6,
@@ -21,6 +47,11 @@
   "mock_media": {
     "enabled": true,
     "stream_format": "m3u8",
-    "result_format": "mp4"
+    "result_format": "mp4",
+    "player_highlight_duration_seconds": 45.0,
+    "team_highlight_duration_seconds": 90.0,
+    "labeled_clip_duration_seconds": 30.0,
+    "participant_video_duration_seconds": 60.0
   }
 }
+

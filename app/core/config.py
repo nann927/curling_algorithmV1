@@ -198,11 +198,22 @@ class IntegrationPostProcessConfig(BaseModel):
     )
 
 
+class IntegrationSheetMediaConfig(BaseModel):
+    """Integration Mock 单条赛道测试媒体配置。
+
+    preview_url 和 media_url 只用于联调播放器切流验证；为空时继续走 PUBLIC_BASE_URL fallback。
+    """
+
+    preview_url: str | None = None
+    media_url: str | None = None
+
+
 class IntegrationMockConfig(BaseModel):
     """公网联调 Mock 配置。"""
 
     enabled: bool = False
     sheets: list[str] = Field(default_factory=list)
+    sheet_media: dict[str, IntegrationSheetMediaConfig] = Field(default_factory=dict)
     postprocess: IntegrationPostProcessConfig = Field(default_factory=IntegrationPostProcessConfig)
     mock_media: dict[str, Any] = Field(default_factory=lambda: {"enabled": True, "stream_format": "m3u8"})
 
@@ -411,6 +422,7 @@ def get_config_manager() -> ConfigManager:
     """加载并缓存 ConfigManager。"""
 
     return ConfigManager(get_settings())
+
 
 
 
