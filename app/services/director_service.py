@@ -5,12 +5,14 @@ import logging
 from app.core.config import ConfigManager, get_config_manager
 from app.core.enums import StreamType
 from app.core.runtime import SheetRuntime, runtime_manager
-from app.models.director import DirectorDecision
+from app.models.director import DirectorDecision, PreShotDirectorContext
 from app.models.shot import ShotEventContext
 from app.services.director_rule_service import DirectorRuleService
 from app.services.integration_mock_service import IntegrationMockService
 
 logger = logging.getLogger(__name__)
+
+DirectorContext = ShotEventContext | PreShotDirectorContext
 
 
 class DirectorService:
@@ -49,8 +51,8 @@ class DirectorService:
             available_camera_ids=camera_ids_by_role,
         )
 
-    def decide(self, context: ShotEventContext) -> DirectorDecision:
-        """根据 ShotEventContext 产生内部导播决策，并只更新 Runtime 当前镜头。"""
+    def decide(self, context: DirectorContext) -> DirectorDecision:
+        """根据导演上下文产生内部导播决策，并只更新 Runtime 当前镜头。"""
 
         match = runtime_manager.get_match(context.match_id)
         if match.sheet_id is not None and match.sheet_id != context.sheet_id:
@@ -66,15 +68,20 @@ class DirectorService:
         if decision.camera_id is not None and not decision.hold_previous:
             sheet.current_camera_id = decision.camera_id
         logger.info(
-            "director decision match_id=%s sheet_id=%s shot_id=%s event_type=%s camera_id=%s camera_role=%s fallback=%s hold=%s",
+            "director decision match_id=%s sheet_id=%s shot_id=%s event_type=%s direction=%s source_end=%s target_end=%s camera_id=%s camera_role=%s install_end=%s fallback=%s hold=%s hold_duration_ms=%s",
             decision.match_id,
             decision.sheet_id,
             decision.shot_id,
             decision.event_type,
+            decision.direction,
+            decision.source_end,
+            decision.target_end,
             decision.camera_id,
             decision.camera_role,
+            decision.install_end,
             decision.fallback_used,
             decision.hold_previous,
+            decision.hold_duration_ms,
         )
         return decision
 

@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.adapters.stone.replay import JsonlReplaySource
 from app.core.runtime import MatchRuntime, runtime_manager
+from app.models.director import PreShotDirectorContext
 from app.models.event import TriggerEvent
 from app.models.shot import ShotEventContext
 from app.models.stone import StonePosition
@@ -62,7 +63,22 @@ def register_match(match_id: str, available_camera_ids: dict[str, list[str]], di
     )
 
 
-def decision_summary(context: ShotEventContext, decision) -> dict:
+def pre_shot_context(match_id: str, direction: str, source_end: str, target_end: str, timestamp: int = 900) -> PreShotDirectorContext:
+    """人工构造 Phase 6 synthetic pre-shot event；不修改 Phase 5 Replay 数据。"""
+
+    return PreShotDirectorContext(
+        match_id=match_id,
+        sheet_id="sheet_01",
+        event_type="direction_locked",
+        timestamp=timestamp,
+        direction=direction,
+        source_end=source_end,
+        target_end=target_end,
+        candidate_tag_id=None,
+    )
+
+
+def decision_summary(context: ShotEventContext | PreShotDirectorContext, decision) -> dict:
     """把 DirectorDecision 转为便于肉眼检查的时间线摘要。"""
 
     return {
@@ -79,11 +95,21 @@ def decision_summary(context: ShotEventContext, decision) -> dict:
         "install_end": decision.install_end,
         "fallback_used": decision.fallback_used,
         "hold_previous": decision.hold_previous,
+        "hold_duration_ms": decision.hold_duration_ms,
         "reason": decision.reason,
     }
 
 
-def run_replay_case(name: str, match_id: str, path: str, available_camera_ids: dict[str, list[str]]) -> list[dict]:
+def run_replay_case(
+    name: str,
+    match_id: str,
+    path: str,
+    available_camera_ids: dict[str, list[str]],
+    *,
+    direction: str,
+    source_end: str,
+    target_end: str,
+) -> list[dict]:
     """执行一个 Phase 5 Replay，并输出 Phase 6 导播决策时间线。"""
 
     director_service = DirectorService()
@@ -91,6 +117,11 @@ def run_replay_case(name: str, match_id: str, path: str, available_camera_ids: d
     initial_camera_id = runtime_manager.get_match(match_id).sheets["sheet_01"].current_camera_id
     stone_service = StoneEventService(DirectionService(confirm_count=3, direction_zones_by_sheet=ZONES))
     timeline: list[dict] = []
+
+    locked_context = pre_shot_context(match_id, direction, source_end, target_end)
+    locked_decision = director_service.decide(locked_context)
+    timeline.append(decision_summary(locked_context, locked_decision))
+
     for record in JsonlReplaySource(path).all_records():
         if isinstance(record.payload, TriggerEvent):
             context = stone_service.process_trigger_event(record.payload, match_id=match_id)
@@ -99,8 +130,9 @@ def run_replay_case(name: str, match_id: str, path: str, available_camera_ids: d
                 timeline.append(decision_summary(context, decision))
         elif isinstance(record.payload, StonePosition):
             stone_service.process_position(record.payload, match_id=match_id)
-    print(f"\n{name}")
-    print(json.dumps({"initial_camera_id": initial_camera_id}, ensure_ascii=False))
+    print()
+    print(name)
+    print(json.dumps({"initial_camera_id": initial_camera_id, "direction_locked_is_synthetic": True}, ensure_ascii=False))
     for item in timeline:
         print(json.dumps(item, ensure_ascii=False))
     runtime_manager.remove_match(match_id)
@@ -126,7 +158,8 @@ def run_unknown_case() -> None:
         quality_status=None,
     )
     decision = director_service.decide(context)
-    print("\nUNKNOWN_DIRECTION")
+    print()
+    print("UNKNOWN_DIRECTION")
     print(json.dumps({"initial_camera_id": runtime_manager.get_match(match_id).sheets["sheet_01"].current_camera_id}, ensure_ascii=False))
     print(json.dumps(decision_summary(context, decision), ensure_ascii=False))
     runtime_manager.remove_match(match_id)
@@ -141,18 +174,27 @@ def main() -> None:
         "phase6_replay_a",
         "data/mock/stone/phase5_A_to_B_complete.jsonl",
         FULL_CAMERAS_HOUSE_B,
+        direction="A_TO_B",
+        source_end="A",
+        target_end="B",
     )
     run_replay_case(
         "B_TO_A_FULL_WITH_ALARM",
         "phase6_replay_b",
         "data/mock/stone/phase5_B_to_A_alarm.jsonl",
         FULL_CAMERAS_HOUSE_A,
+        direction="B_TO_A",
+        source_end="B",
+        target_end="A",
     )
     run_replay_case(
         "A_TO_B_NO_HOUSE_FALLBACK",
         "phase6_replay_fallback",
         "data/mock/stone/phase5_A_to_B_complete.jsonl",
         NO_HOUSE_CAMERAS,
+        direction="A_TO_B",
+        source_end="A",
+        target_end="B",
     )
     run_unknown_case()
 

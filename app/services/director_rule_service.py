@@ -1,22 +1,25 @@
-"""Director Rule V1 确定性镜头选择规则。
+"""Director Rule 确定性镜头选择规则。
 
-本服务只消费已经标准化的 ShotEventContext，不读取 WebSocket 原始数据，也不控制 FFmpeg。
+本服务只消费已经标准化的导演上下文，不读取 WebSocket 原始数据，也不控制 FFmpeg。
 """
 
 from __future__ import annotations
 
 from app.core.config import ConfigManager, SiteCameraConfig, get_config_manager
-from app.models.director import DirectorDecision
+from app.models.director import DirectorDecision, PreShotDirectorContext
 from app.models.shot import ShotEventContext
+
+DirectorContext = ShotEventContext | PreShotDirectorContext
 
 
 EVENT_PREFERENCES = {
-    # V1 规则集中维护，后续现场调参只改这一处映射。
-    "touch": ("close_shot", "source", "touch_source_close"),
-    "departure": ("medium_shot", "source", "departure_source_medium"),
-    "magnetic_1": ("medium_shot", "source", "magnetic1_source_medium"),
-    "magnetic_2": ("medium_shot", "target", "magnetic2_target_medium"),
-    "stop": ("house_top", "target", "stop_target_house"),
+    # Phase 6.6：投掷过程由 target_end 端负责，stop 后回切 source_end 端近景。
+    "direction_locked": ("close_shot", "target", "direction_locked_target_close"),
+    "touch": ("close_shot", "target", "touch_target_close"),
+    "departure": ("close_shot", "target", "departure_target_close"),
+    "magnetic_1": ("medium_shot", "target", "magnetic1_target_medium"),
+    "magnetic_2": ("house_top", "target", "magnetic2_target_house"),
+    "stop": ("close_shot", "source", "stop_source_close"),
 }
 
 FALLBACK_BY_ROLE = {
@@ -29,18 +32,18 @@ STABLE_ANY_ROLE_ORDER = ["close_shot", "medium_shot", "house_top"]
 
 
 class DirectorRuleService:
-    """把 ShotEventContext 转换为 DirectorDecision 的纯规则服务。"""
+    """把导演上下文转换为 DirectorDecision 的纯规则服务。"""
 
     def __init__(self, config_manager: ConfigManager | None = None) -> None:
         self._config_manager = config_manager or get_config_manager()
 
     def decide(
         self,
-        context: ShotEventContext,
+        context: DirectorContext,
         available_camera_ids: dict[str, list[str]],
         current_camera_id: str | None = None,
     ) -> DirectorDecision:
-        """根据当前 Shot 事件选择一个已启用的内部 camera_id。"""
+        """根据当前导演事件选择一个已启用的内部 camera_id。"""
 
         if not self._has_available_camera(available_camera_ids):
             return self._decision(context, None, "no_available_camera", fallback_used=True, hold_previous=True)
@@ -58,8 +61,15 @@ class DirectorRuleService:
             return self._direction_unknown_decision(context, available_camera_ids, current_camera_id)
 
         selected = self._select_by_role_and_end(available_camera_ids, preferred_role, preferred_end)
+        hold_duration_ms = self._hold_duration_ms(context)
         if selected is not None:
-            return self._decision_for_camera(context, selected, reason, current_camera_id=current_camera_id)
+            return self._decision_for_camera(
+                context,
+                selected,
+                reason,
+                current_camera_id=current_camera_id,
+                hold_duration_ms=hold_duration_ms,
+            )
 
         fallback = self._fallback_same_end(available_camera_ids, preferred_role, preferred_end)
         if fallback is not None:
@@ -69,12 +79,20 @@ class DirectorRuleService:
                 "preferred_camera_unavailable",
                 current_camera_id=current_camera_id,
                 fallback_used=True,
+                hold_duration_ms=hold_duration_ms,
             )
-        return self._fallback_any(context, available_camera_ids, current_camera_id, "preferred_camera_unavailable", fallback_used=True)
+        return self._fallback_any(
+            context,
+            available_camera_ids,
+            current_camera_id,
+            "preferred_camera_unavailable",
+            fallback_used=True,
+            hold_duration_ms=hold_duration_ms,
+        )
 
     def _alarm_decision(
         self,
-        context: ShotEventContext,
+        context: DirectorContext,
         available_camera_ids: dict[str, list[str]],
         current_camera_id: str | None,
     ) -> DirectorDecision:
@@ -93,7 +111,7 @@ class DirectorRuleService:
 
     def _direction_unknown_decision(
         self,
-        context: ShotEventContext,
+        context: DirectorContext,
         available_camera_ids: dict[str, list[str]],
         current_camera_id: str | None,
     ) -> DirectorDecision:
@@ -127,12 +145,13 @@ class DirectorRuleService:
 
     def _fallback_any(
         self,
-        context: ShotEventContext,
+        context: DirectorContext,
         available_camera_ids: dict[str, list[str]],
         current_camera_id: str | None,
         reason: str,
         *,
         fallback_used: bool,
+        hold_duration_ms: int = 0,
     ) -> DirectorDecision:
         """同端不可用时，保持当前镜头或选择稳定的任意已启用镜头。"""
 
@@ -145,11 +164,19 @@ class DirectorRuleService:
                 current_camera_id=current_camera_id,
                 fallback_used=fallback_used,
                 hold_previous=True,
+                hold_duration_ms=hold_duration_ms,
             )
         any_camera = self._select_any_stable(available_camera_ids)
         if any_camera is None:
             return self._decision(context, None, "no_available_camera", fallback_used=True, hold_previous=True)
-        return self._decision_for_camera(context, any_camera, reason, current_camera_id=current_camera_id, fallback_used=fallback_used)
+        return self._decision_for_camera(
+            context,
+            any_camera,
+            reason,
+            current_camera_id=current_camera_id,
+            fallback_used=fallback_used,
+            hold_duration_ms=hold_duration_ms,
+        )
 
     def _select_by_role_and_end(
         self,
@@ -204,36 +231,50 @@ class DirectorRuleService:
 
         return any(bool(values) for values in available_camera_ids.values())
 
+    def _hold_duration_ms(self, context: DirectorContext) -> int:
+        """stop 决策声明 3 秒保持，其它事件不声明保持时长。"""
+
+        return 3000 if context.event_type == "stop" else 0
+
     def _decision_for_camera(
         self,
-        context: ShotEventContext,
+        context: DirectorContext,
         camera: SiteCameraConfig,
         reason: str,
         *,
         current_camera_id: str | None,
         fallback_used: bool = False,
         hold_previous: bool | None = None,
+        hold_duration_ms: int = 0,
     ) -> DirectorDecision:
         """把摄像头 metadata 转换成 DirectorDecision。"""
 
         hold = camera.camera_id == current_camera_id if hold_previous is None else hold_previous
-        return self._decision(context, camera, reason, fallback_used=fallback_used, hold_previous=hold)
+        return self._decision(
+            context,
+            camera,
+            reason,
+            fallback_used=fallback_used,
+            hold_previous=hold,
+            hold_duration_ms=hold_duration_ms,
+        )
 
     def _decision(
         self,
-        context: ShotEventContext,
+        context: DirectorContext,
         camera: SiteCameraConfig | None,
         reason: str,
         *,
         fallback_used: bool,
         hold_previous: bool,
+        hold_duration_ms: int = 0,
     ) -> DirectorDecision:
         """统一组装 DirectorDecision，确保字段稳定。"""
 
         return DirectorDecision(
             match_id=context.match_id,
             sheet_id=context.sheet_id,
-            shot_id=context.shot_id,
+            shot_id=getattr(context, "shot_id", None),
             event_type=context.event_type,
             timestamp=context.timestamp,
             direction=context.direction,
@@ -245,4 +286,5 @@ class DirectorRuleService:
             reason=reason,
             fallback_used=fallback_used,
             hold_previous=hold_previous,
+            hold_duration_ms=hold_duration_ms,
         )
