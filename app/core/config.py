@@ -36,6 +36,15 @@ class Settings(BaseSettings):
     log_path: str = "data/logs/app.log"
     ffmpeg_path: str = "ffmpeg"
     ffprobe_path: str = "ffprobe"
+    ws_enabled: bool = False
+    api_base_url: str = ""
+    ws_url: str = ""
+    login_path: str = "/sys/getToken"
+    username: str | None = None
+    password: str | None = None
+    user_id: str | None = None
+    ws_reconnect_seconds: float = 3.0
+    ws_connect_timeout_seconds: float = 5.0
     system_config: dict[str, Any] = Field(default_factory=dict)
     site_config: dict[str, Any] = Field(default_factory=dict)
     integration_mock_config: dict[str, Any] = Field(default_factory=dict)
