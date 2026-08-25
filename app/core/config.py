@@ -45,11 +45,55 @@ class Settings(BaseSettings):
     user_id: str | None = None
     ws_reconnect_seconds: float = 3.0
     ws_connect_timeout_seconds: float = 5.0
+    position_cache_size: int = 20
     system_config: dict[str, Any] = Field(default_factory=dict)
     site_config: dict[str, Any] = Field(default_factory=dict)
     integration_mock_config: dict[str, Any] = Field(default_factory=dict)
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="CURLING_", extra="ignore")
+
+
+class CoordinateBoundsConfig(BaseModel):
+    """场地矩形区域配置，坐标单位沿用电子冰壶系统原始坐标。"""
+
+    x_min: float | None = None
+    x_max: float | None = None
+    y_min: float | None = None
+    y_max: float | None = None
+
+
+class PhysicalHoglineConfig(BaseModel):
+    """固定物理 hog line 坐标；按 A/B 端命名，避免混淆协议中的 hogline1/2 顺序。"""
+
+    x: float | None = None
+    y: float | None = None
+
+
+class SheetPositionCalibrationConfig(BaseModel):
+    """单条赛道定位标定配置；现场未标定时允许字段为 null。"""
+
+    sheet_id: str
+    enabled: bool = False
+    position_lane_id: str | None = None
+    lane_bounds: CoordinateBoundsConfig | None = None
+    ready_zones: dict[str, CoordinateBoundsConfig | None] = Field(default_factory=lambda: {"A": None, "B": None})
+    hoglines: dict[str, PhysicalHoglineConfig | None] = Field(default_factory=lambda: {"A": None, "B": None})
+
+    @field_validator("ready_zones", "hoglines")
+    @classmethod
+    def validate_end_keys(cls, value: dict[str, Any]) -> dict[str, Any]:
+        """标定端位只允许 A/B；字段缺失表示尚未现场标定。"""
+
+        invalid = set(value) - {"A", "B"}
+        if invalid:
+            raise ValueError(f"calibration end keys must be A/B, invalid={sorted(invalid)}")
+        return value
+
+
+class SiteCalibrationConfig(BaseModel):
+    """现场标定配置根节点；Phase 7.1 只建模型，不推导方向。"""
+
+    position: list[SheetPositionCalibrationConfig] = Field(default_factory=list)
 
 
 class SiteSheetConfig(BaseModel):
@@ -136,7 +180,7 @@ class SiteConfig(BaseModel):
     cameras: list[SiteCameraConfig] = Field(default_factory=list)
     microphones: list[SiteMicrophoneConfig] = Field(default_factory=list)
     stone_registry: list[StoneRegistryConfig] = Field(default_factory=list)
-    calibration: dict[str, Any] = Field(default_factory=dict)
+    calibration: SiteCalibrationConfig = Field(default_factory=SiteCalibrationConfig)
 
     @model_validator(mode="after")
     def validate_site_config(self) -> "SiteConfig":
@@ -189,6 +233,13 @@ class SiteConfig(BaseModel):
         tag_ids = [stone.tag_id for stone in self.stone_registry if stone.tag_id]
         if len(set(tag_ids)) != len(tag_ids):
             raise ValueError(f"tag_id must be unique when not null, duplicates={_duplicates(tag_ids)}")
+
+        calibration_sheet_ids = [item.sheet_id for item in self.calibration.position]
+        if len(set(calibration_sheet_ids)) != len(calibration_sheet_ids):
+            raise ValueError(f"calibration sheet_id must be unique, duplicates={_duplicates(calibration_sheet_ids)}")
+        for calibration in self.calibration.position:
+            if calibration.sheet_id not in sheet_ids:
+                raise ValueError(f"calibration references unknown sheet_id: {calibration.sheet_id}")
         return self
 
 
@@ -334,10 +385,23 @@ class ConfigManager:
     def get_sheet_id_by_position_lane(self, lane_id: str) -> str:
         """将定位平台 laneId 转换为内部 sheet_id。"""
 
+        for mapping in self.site_config.lane_mappings:
+            if mapping.lane_id == lane_id:
+                return mapping.sheet_id
         for sheet in self.site_config.sheets:
             if sheet.position_lane_id == lane_id:
                 return sheet.sheet_id
         raise KeyError(f"position_lane_id not found in site_config: {lane_id}")
+
+    def get_position_calibration(self, sheet_id: str) -> SheetPositionCalibrationConfig:
+        """读取单条赛道定位标定；未配置时返回未标定模型。"""
+
+        self.validate_sheet_id(sheet_id)
+        for calibration in self.site_config.calibration.position:
+            if calibration.sheet_id == sheet_id:
+                return calibration
+        sheet = self.get_sheet(sheet_id)
+        return SheetPositionCalibrationConfig(sheet_id=sheet_id, enabled=False, position_lane_id=sheet.position_lane_id)
 
     def get_sheet_id_by_trigger_lane(self, lane_id: str) -> str:
         """将触发平台 laneId 转换为内部 sheet_id。"""

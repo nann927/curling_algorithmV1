@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class RawTrajectoryPoint(BaseModel):
@@ -52,6 +52,17 @@ class TrajectoryRawMessage(BaseRawCurlingMessage):
     type: Literal[3]
     lane_id: str | None = Field(default=None, alias="laneId")
     trajectory_data: list[RawTrajectoryPoint] = Field(default_factory=list, alias="trajectoryData")
+
+    @field_validator("trajectory_data", mode="before")
+    @classmethod
+    def normalize_trajectory_data(cls, value: Any) -> Any:
+        """兼容接口中单点对象和批量数组两种 trajectoryData 形态。"""
+
+        if value is None:
+            return []
+        if isinstance(value, dict):
+            return [value]
+        return value
 
 
 class StoneStateRawMessage(BaseRawCurlingMessage):
