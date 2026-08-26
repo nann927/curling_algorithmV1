@@ -46,11 +46,30 @@ class Settings(BaseSettings):
     ws_reconnect_seconds: float = 3.0
     ws_connect_timeout_seconds: float = 5.0
     position_cache_size: int = 20
+    position_freshness_ms: int = 1000
+    direction_confirm_count: int = 3
     system_config: dict[str, Any] = Field(default_factory=dict)
     site_config: dict[str, Any] = Field(default_factory=dict)
     integration_mock_config: dict[str, Any] = Field(default_factory=dict)
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="CURLING_", extra="ignore")
+    @field_validator("position_cache_size", "position_freshness_ms")
+    @classmethod
+    def validate_positive_int(cls, value: int) -> int:
+        """缓存长度和 freshness 窗口必须为正数，避免方向判断永远失效。"""
+
+        if value <= 0:
+            raise ValueError("value must be greater than 0")
+        return value
+
+    @field_validator("direction_confirm_count")
+    @classmethod
+    def validate_direction_confirm_count(cls, value: int) -> int:
+        """方向锁定至少需要 1 个定位点参与确认。"""
+
+        if value < 1:
+            raise ValueError("direction_confirm_count must be greater than or equal to 1")
+        return value
 
 
 class CoordinateBoundsConfig(BaseModel):
@@ -495,9 +514,3 @@ def get_config_manager() -> ConfigManager:
     """加载并缓存 ConfigManager。"""
 
     return ConfigManager(get_settings())
-
-
-
-
-
-
