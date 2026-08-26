@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     ws_enabled: bool = False
     api_base_url: str = ""
     ws_url: str = ""
-    login_path: str = "/sys/getToken"
+    login_path: str = "/sys/mLogin"
     username: str | None = None
     password: str | None = None
     user_id: str | None = None

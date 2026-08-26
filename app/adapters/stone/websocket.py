@@ -9,6 +9,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
+from urllib.parse import quote
 
 import websockets
 
@@ -29,6 +30,10 @@ class WebSocketLike(Protocol):
 WebSocketConnector = Callable[..., Awaitable[WebSocketLike]]
 
 
+class CurlingWebSocketConfigError(ValueError):
+    """冰壶 WebSocket 连接配置错误。"""
+
+
 class CurlingWebSocketTransport:
     """冰壶 WebSocket 传输层客户端。"""
 
@@ -39,10 +44,12 @@ class CurlingWebSocketTransport:
         *,
         reconnect_seconds: float = 3.0,
         connect_timeout_seconds: float = 5.0,
+        user_id: str | None = None,
         connector: WebSocketConnector | None = None,
         sleep: Callable[[float], Awaitable[None]] | None = None,
     ) -> None:
         self.ws_url = ws_url
+        self.user_id = user_id
         self.reconnect_seconds = reconnect_seconds
         self.connect_timeout_seconds = connect_timeout_seconds
         self._token_client = token_client
@@ -61,14 +68,15 @@ class CurlingWebSocketTransport:
     async def connect(self) -> None:
         """获取 token 并连接 WebSocket；token 通过 Sec-WebSocket-Protocol 传递。"""
 
+        ws_url = self._resolved_ws_url()
         token = self._token_client.fetch_token()
         self._websocket = await self._connector(
-            self.ws_url,
+            ws_url,
             subprotocols=[token],
             open_timeout=self.connect_timeout_seconds,
         )
         self._running = True
-        logger.info("curling websocket connected url=%s", self.ws_url)
+        logger.info("curling websocket connected url=%s", ws_url)
 
     async def receive(self) -> RawCurlingMessage | None:
         """接收并解析一条 Raw 消息；断线时返回 None，由上层决定是否重连。"""
@@ -113,3 +121,12 @@ class CurlingWebSocketTransport:
             return message
         await self.reconnect()
         return await self.receive()
+
+    def _resolved_ws_url(self) -> str:
+        """解析 WebSocket URL；完整 URL 原样使用，{userId} 由配置值替换。"""
+
+        if "{userId}" not in self.ws_url:
+            return self.ws_url
+        if not self.user_id:
+            raise CurlingWebSocketConfigError("CURLING_USER_ID is required when CURLING_WS_URL contains {userId}")
+        return self.ws_url.replace("{userId}", quote(self.user_id, safe=""))

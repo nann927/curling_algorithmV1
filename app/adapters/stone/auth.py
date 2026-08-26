@@ -39,6 +39,7 @@ class CurlingTokenClient:
         self._login_path = login_path.lstrip("/")
         self._username = username
         self._password = password
+        # userId 属于 WebSocket URL 路径参数，不属于 websocket.docx 定义的登录请求体。
         self._user_id = user_id
         self._timeout_seconds = timeout_seconds
         self._http_client = http_client or httpx.Client(trust_env=False)
@@ -76,6 +77,4 @@ class CurlingTokenClient:
             payload["username"] = self._username
         if self._password is not None:
             payload["password"] = self._password
-        if self._user_id is not None:
-            payload["userId"] = self._user_id
         return payload

@@ -77,10 +77,14 @@ class StoneStateRawMessage(BaseRawCurlingMessage):
     total_timing: int | float | str | None = Field(default=None, alias="totalTiming")
 
 
-class HeartbeatRawMessage(BaseRawCurlingMessage):
-    """type=12 原始消息，通常用于连接心跳或状态通知。"""
+class FullDataRawMessage(BaseRawCurlingMessage):
+    """type=12 全部数据信息/连接成功原始消息；当前只保留 raw payload。"""
 
     type: Literal[12]
+
+
+# 向后兼容 Phase 7.0 旧命名；正式语义以 FullDataRawMessage 为准。
+HeartbeatRawMessage = FullDataRawMessage
 
 
 class GenericRawMessage(BaseRawCurlingMessage):
@@ -101,7 +105,7 @@ RawCurlingMessage = (
     | MatchStopRawMessage
     | TrajectoryRawMessage
     | StoneStateRawMessage
-    | HeartbeatRawMessage
+    | FullDataRawMessage
     | GenericRawMessage
     | MalformedRawMessage
 )
@@ -128,7 +132,7 @@ def parse_raw_curling_message(raw_text: str) -> RawCurlingMessage:
         if message_type == 4:
             return StoneStateRawMessage.model_validate(base_payload)
         if message_type == 12:
-            return HeartbeatRawMessage.model_validate(base_payload)
+            return FullDataRawMessage.model_validate(base_payload)
         if isinstance(message_type, int):
             return GenericRawMessage.model_validate(base_payload)
         return MalformedRawMessage(error="type_is_required", raw_text=raw_text)
