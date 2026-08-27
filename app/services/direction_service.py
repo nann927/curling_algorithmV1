@@ -126,6 +126,37 @@ class DirectionService:
         state.status = DirectionStatus.FROZEN.value
         return state
 
+    def set_locked_direction(
+        self,
+        sheet_id: str,
+        *,
+        direction: str,
+        source_end: str,
+        target_end: str,
+        match_id: str | None = None,
+        timestamp: int | None = None,
+    ) -> DirectionState:
+        """写入外部已校验的预锁方向，供真实 type=4 departure 同步冻结。
+
+        Phase 7.5 已通过 candidate_tag_id 与 movingStoneTagId 严格校验同一颗冰壶，
+        因此这里仅提供公开注入入口；未调用本方法的旧 Phase 4/5 流程完全保持原行为。
+        """
+
+        key = self._key(sheet_id, match_id)
+        state = DirectionState(
+            sheet_id=sheet_id,
+            match_id=key[0],
+            status=DirectionStatus.LOCKED.value,
+            candidate_source_end=source_end,
+            source_end=source_end,
+            target_end=target_end,
+            direction=direction,
+            confirm_count=self._confirm_count,
+            last_update_time=timestamp,
+        )
+        self._states[key] = state
+        return state
+
     def reset(self, sheet_id: str, match_id: str | None = None) -> DirectionState:
         """显式重置赛道方向状态。"""
 
