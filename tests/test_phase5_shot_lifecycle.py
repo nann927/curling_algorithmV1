@@ -152,18 +152,20 @@ def test_missing_magnetic_is_incomplete_but_finishable() -> None:
     assert finish.quality_status == ShotQualityStatus.INCOMPLETE.value
 
 
-def test_departure_without_touch_creates_degraded_shot() -> None:
-    """缺 touch 时 departure 创建降级 Shot。"""
+def test_real_protocol_without_touch_can_complete_shot() -> None:
+    """真实协议没有 touch；departure/magnetic_1/magnetic_2/stop 齐全即可 complete。"""
 
     service = _service()
-    match_id = "match_degraded"
+    match_id = "match_real_no_touch"
     context = _assert_context(service.process_trigger_event(_trigger("departure", 1000), match_id=match_id))
     assert context.shot_status == ThrowStatus.RELEASED.value
-    service.process_trigger_event(_trigger("magnetic_2", 1100), match_id=match_id)
-    finish = _assert_context(service.process_trigger_event(_trigger("stop", 1200), match_id=match_id))
+    service.process_trigger_event(_trigger("magnetic_1", 1100), match_id=match_id)
+    service.process_trigger_event(_trigger("magnetic_2", 1200), match_id=match_id)
+    finish = _assert_context(service.process_trigger_event(_trigger("stop", 1300), match_id=match_id))
     shot = ShotRepository().get(finish.shot_id)
     assert shot.touch_time is None
-    assert shot.quality_status in {ShotQualityStatus.INCOMPLETE.value, ShotQualityStatus.ABNORMAL.value}
+    assert shot.quality_status == ShotQualityStatus.COMPLETE.value
+    assert shot.abnormal_reason is None
 
 
 def test_events_without_shot_are_ignored() -> None:

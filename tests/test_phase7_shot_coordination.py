@@ -182,8 +182,8 @@ def test_matched_a_to_b_inherits_direction_and_resets_only_after_stop() -> None:
     assert shot.target_end == "B"
     assert shot.status == ThrowStatus.FINISHED.value
     assert shot.touch_time is None
-    assert shot.quality_status == ShotQualityStatus.INCOMPLETE.value
-    assert shot.abnormal_reason == "departure_without_touch"
+    assert shot.quality_status == ShotQualityStatus.COMPLETE.value
+    assert shot.abnormal_reason is None
 
 
 def test_matched_b_to_a_inherits_reverse_direction() -> None:

@@ -199,8 +199,8 @@ def test_normal_chain_dispatches_to_phase5_without_touch_and_persists_finished_s
     assert shot.alarm_time is None
     assert shot.direction == "UNKNOWN"
     assert shot.status == ThrowStatus.FINISHED.value
-    assert shot.quality_status == ShotQualityStatus.INCOMPLETE.value
-    assert shot.abnormal_reason == "departure_without_touch"
+    assert shot.quality_status == ShotQualityStatus.COMPLETE.value
+    assert shot.abnormal_reason is None
 
 
 def test_forward_skip_does_not_backfill_missing_event_and_uses_phase5_degraded_behavior() -> None:

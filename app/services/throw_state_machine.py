@@ -104,7 +104,7 @@ class ThrowStateMachine:
         return shot
 
     def _departure(self, match_id: str, event: TriggerEvent, direction_state: DirectionState | None) -> Shot:
-        """departure 记录离手时间并冻结方向；缺 touch 时创建降级 Shot。"""
+        """departure 记录离手时间并冻结方向；真实 type=4 协议没有 touch 时也可直接创建 Shot。"""
 
         key = (match_id, event.sheet_id)
         shot = self._current_shots.get(key)
@@ -115,7 +115,6 @@ class ThrowStateMachine:
                 shot_id=f"{match_id}_{event.sheet_id}_shot_{sequence:04d}",
                 match_id=match_id,
                 sheet_id=event.sheet_id,
-                abnormal_reason="departure_without_touch",
             )
             self._current_shots[key] = shot
         if shot.departure_time is not None:
@@ -193,8 +192,8 @@ class ThrowStateMachine:
 
         if shot.quality_status == ShotQualityStatus.ABNORMAL.value:
             return ShotQualityStatus.ABNORMAL.value
+        # 真实冰壶 type=4 协议没有 touch；完整 Shot 只要求业务状态事件齐全。
         required = [
-            shot.touch_time,
             shot.departure_time,
             shot.first_magnetic_time,
             shot.second_magnetic_time,
